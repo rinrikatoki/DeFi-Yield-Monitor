@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>DeFi Yield Monitor</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <style>
+    body {
+      font-family: sans-serif;
+      margin: 0;
+      padding: 20px;
+      background: #f4f4f4;
+      color: #333;
+    }
+    h1 {
+      text-align: center;
+      font-size: 24px;
+    }
+    #yield-list {
+      max-width: 900px;
+      margin: 0 auto;
+    }
+    .pool {
+      background: white;
+      border-radius: 10px;
+      padding: 15px;
+      margin-bottom: 12px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+    .pool h3 {
+      margin: 0 0 10px;
+    }
+    .pool .meta {
+      font-size: 14px;
+      color: #666;
+    }
+    .pool .yield {
+      font-size: 18px;
+      font-weight: bold;
+      color: green;
+    }
+    #loader {
+      text-align: center;
+      margin-top: 40px;
+      font-size: 18px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Top DeFi Yields</h1>
+  <div id="loader">Loading yields...</div>
+  <div id="yield-list"></div>
+
+  <script>
+    async function fetchYields() {
+      const res = await fetch("https://yields.llama.fi/pools");
+      const data = await res.json();
+      return data.data;
+    }
+
+    function renderYields(pools) {
+      const container = document.getElementById("yield-list");
+      const loader = document.getElementById("loader");
+      loader.style.display = "none";
+
+      // Sort by highest APY first
+      pools.sort((a, b) => b.apy - a.apy);
+
+      // Filter and show top 20 pools with valid APY
+      pools.slice(0, 20).forEach(pool => {
+        if (!pool.apy || pool.apy <= 0) return;
+
+        const el = document.createElement("div");
+        el.className = "pool";
+        el.innerHTML = `
+          <h3>${pool.project} — ${pool.symbol}</h3>
+          <div class="meta">
+            Platform: ${pool.chain} | Pool: ${pool.pool}
+          </div>
+          <div class="yield">APY: ${pool.apy.toFixed(2)}%</div>
+        `;
+        container.appendChild(el);
+      });
+    }
+
+    (async () => {
+      const pools = await fetchYields();
+      renderYields(pools);
+    })();
+  </script>
+</body>
+</html>
