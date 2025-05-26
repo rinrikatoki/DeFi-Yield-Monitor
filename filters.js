@@ -2,14 +2,18 @@
 function createMultiSelectDropdown({ id, title, values, onChange, searchable = false, loadMore = false, chunkSize = 20 }) {
   const container = document.getElementById(id);
   container.classList.add('dropdown');
-  container.innerHTML = `<div class="dropdown-toggle">${title}</div><div class="dropdown-menu"></div>`;
+  container.innerHTML = `<div class="dropdown-toggle">${title} (<span class="count">${values.length}</span>)</div><div class="dropdown-menu"></div>`;
 
   const toggle = container.querySelector('.dropdown-toggle');
+  const countSpan = toggle.querySelector('.count');
   const menu = container.querySelector('.dropdown-menu');
   let selected = new Set(values);
   let displayed = [...values];
 
-  const updateSelection = () => onChange([...selected]);
+  const updateSelection = () => {
+    countSpan.textContent = selected.size;
+    onChange([...selected]);
+  };
 
   const renderOptions = (list) => {
     menu.innerHTML = '';
@@ -17,6 +21,10 @@ function createMultiSelectDropdown({ id, title, values, onChange, searchable = f
       const input = document.createElement('input');
       input.className = 'dropdown-search';
       input.placeholder = 'Search...';
+      input.style.width = '90%';
+      input.style.margin = '8px auto';
+      input.style.display = 'block';
+      input.style.padding = '6px';
       input.addEventListener('click', e => e.stopPropagation());
       input.oninput = () => {
         const q = input.value.toLowerCase();
@@ -50,6 +58,9 @@ function createMultiSelectDropdown({ id, title, values, onChange, searchable = f
 
     list.forEach(v => {
       const label = document.createElement('label');
+      label.style.display = 'block';
+      label.style.padding = '5px 10px';
+      label.style.cursor = 'pointer';
       label.innerHTML = `<input type="checkbox" value="${v}" ${selected.has(v) ? 'checked' : ''}> ${v}`;
       const checkbox = label.querySelector('input');
       checkbox.onchange = () => {
@@ -63,6 +74,8 @@ function createMultiSelectDropdown({ id, title, values, onChange, searchable = f
     if (loadMore && list.length < values.length) {
       const btn = document.createElement('button');
       btn.textContent = 'Load More';
+      btn.style.margin = '10px auto';
+      btn.style.display = 'block';
       btn.onclick = (e) => {
         e.stopPropagation();
         displayed = values.slice(0, displayed.length + chunkSize);
