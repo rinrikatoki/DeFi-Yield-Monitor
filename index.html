@@ -1,16 +1,19 @@
 <!DOCTYPE html>
-<html lang="en" dir="ltr">
+<html lang="fa" dir="rtl">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>DeFi Yield Monitor</title>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;700&display=swap" rel="stylesheet">
   <style>
     :root {
       --bg: #f4f4f4;
       --text: #111;
       --card: #fff;
       --highlight: green;
+      --font: 'Segoe UI', sans-serif;
     }
 
     [data-theme="dark"] {
@@ -20,8 +23,12 @@
       --highlight: #00e676;
     }
 
+    [lang="fa"] {
+      --font: 'Vazirmatn', sans-serif;
+    }
+
     body {
-      font-family: 'Segoe UI', sans-serif;
+      font-family: var(--font);
       margin: 0;
       padding: 20px;
       background: var(--bg);
@@ -31,7 +38,7 @@
 
     h1 {
       text-align: center;
-      font-size: 26px;
+      font-size: 24px;
       margin-bottom: 20px;
     }
 
@@ -93,102 +100,57 @@
       margin-top: 40px;
     }
 
+    canvas {
+      margin-top: 10px;
+    }
+
     [dir="rtl"] {
       direction: rtl;
     }
   </style>
 </head>
 <body>
-  <h1 id="title">Top DeFi Yields</h1>
+  <h1 id="title">بیشترین سودهای دیفای</h1>
 
   <div id="controls">
-    <input type="text" id="search" placeholder="Search..." />
+    <input type="text" id="search" placeholder="جستجو..." />
+    <select id="protocol-filter"></select>
+    <select id="chain-filter"></select>
     <select id="sort">
-      <option value="apy">Sort by APY</option>
-      <option value="tvl">Sort by TVL</option>
-      <option value="name">Sort by Name</option>
-    </select>
-    <select id="lang">
-      <option value="en">English</option>
-      <option value="fa">فارسی</option>
+      <option value="apy">مرتب‌سازی بر اساس سود</option>
+      <option value="tvl">مرتب‌سازی بر اساس TVL</option>
+      <option value="name">مرتب‌سازی بر اساس نام</option>
     </select>
     <button id="refresh">🔄</button>
     <button id="toggle-theme">🌗</button>
   </div>
 
-  <div id="loader">Loading...</div>
+  <div id="loader">در حال بارگذاری...</div>
   <div id="yield-list"></div>
 
   <script>
-    const translations = {
-      en: {
-        title: "Top DeFi Yields",
-        loading: "Loading...",
-        searchPlaceholder: "Search...",
-        sortByAPY: "Sort by APY",
-        sortByTVL: "Sort by TVL",
-        sortByName: "Sort by Name",
-        noResults: "No results found.",
-        platform: "Platform",
-        pool: "Pool",
-        apy: "APY",
-        tvl: "TVL",
-        stablecoin: "Stablecoin",
-        rewards: "Rewards"
-      },
-      fa: {
-        title: "بیشترین سودهای دیفای",
-        loading: "در حال بارگذاری...",
-        searchPlaceholder: "جستجو...",
-        sortByAPY: "مرتب‌سازی بر اساس سود",
-        sortByTVL: "مرتب‌سازی بر اساس سرمایه قفل‌شده",
-        sortByName: "مرتب‌سازی بر اساس نام",
-        noResults: "نتیجه‌ای یافت نشد.",
-        platform: "پلتفرم",
-        pool: "استخر",
-        apy: "سود سالانه",
-        tvl: "میزان TVL",
-        stablecoin: "استیبل‌کوین",
-        rewards: "جوایز"
-      }
-    };
-
-    let pools = [];
-    let currentLang = "en";
-
+    const faDigits = s => s.toString().replace(/\d/g, d => "۰۱۲۳۴۵۶۷۸۹"[d]);
     const el = {
       loader: document.getElementById("loader"),
       container: document.getElementById("yield-list"),
       search: document.getElementById("search"),
       sort: document.getElementById("sort"),
       refresh: document.getElementById("refresh"),
-      lang: document.getElementById("lang"),
       themeToggle: document.getElementById("toggle-theme"),
-      title: document.getElementById("title")
+      protocolFilter: document.getElementById("protocol-filter"),
+      chainFilter: document.getElementById("chain-filter"),
     };
 
-    function applyTheme(source = "telegram") {
-      let theme = "light";
-      if (source === "telegram" && Telegram.WebApp) {
-        theme = Telegram.WebApp.colorScheme || "light";
-      } else {
-        theme = document.body.getAttribute("data-theme") === "dark" ? "light" : "dark";
-      }
-      document.body.setAttribute("data-theme", theme);
+    let pools = [];
+
+    function applyTheme(toggle = false) {
+      const isDark = document.body.getAttribute("data-theme") === "dark";
+      const newTheme = toggle ? (isDark ? "light" : "dark") : (Telegram.WebApp.colorScheme || "light");
+      document.body.setAttribute("data-theme", newTheme);
     }
 
-    function applyLanguage(lang) {
-      currentLang = lang;
-      const t = translations[lang];
-      document.documentElement.setAttribute("lang", lang);
-      document.documentElement.setAttribute("dir", lang === "fa" ? "rtl" : "ltr");
-      el.title.textContent = t.title;
-      el.loader.textContent = t.loading;
-      el.search.placeholder = t.searchPlaceholder;
-      el.sort.options[0].text = t.sortByAPY;
-      el.sort.options[1].text = t.sortByTVL;
-      el.sort.options[2].text = t.sortByName;
-      renderYields();
+    function formatValue(value) {
+      return document.documentElement.lang === "fa" ? faDigits(value) : value;
     }
 
     async function fetchYields() {
@@ -197,61 +159,110 @@
       const res = await fetch("https://yields.llama.fi/pools");
       const data = await res.json();
       pools = data.data.filter(p => p.apy > 0);
+      updateFilters();
       renderYields();
       el.loader.style.display = "none";
     }
 
-    function renderYields() {
-      const t = translations[currentLang];
-      el.container.innerHTML = "";
+    function updateFilters() {
+      const protocols = [...new Set(pools.map(p => p.project))].sort();
+      const chains = [...new Set(pools.map(p => p.chain))].sort();
 
+      el.protocolFilter.innerHTML = `<option value="">پروتکل</option>` + protocols.map(p => `<option value="${p}">${p}</option>`).join("");
+      el.chainFilter.innerHTML = `<option value="">چین</option>` + chains.map(c => `<option value="${c}">${c}</option>`).join("");
+    }
+
+    function renderYields() {
       const q = el.search.value.toLowerCase();
+      const protocol = el.protocolFilter.value;
+      const chain = el.chainFilter.value;
+
       let results = [...pools];
 
       if (q) {
         results = results.filter(p =>
-          (p.project?.toLowerCase().includes(q)) ||
-          (p.symbol?.toLowerCase().includes(q)) ||
-          (p.chain?.toLowerCase().includes(q)) ||
-          (p.pool?.toLowerCase().includes(q))
+          p.project?.toLowerCase().includes(q) ||
+          p.symbol?.toLowerCase().includes(q) ||
+          p.chain?.toLowerCase().includes(q) ||
+          p.pool?.toLowerCase().includes(q)
         );
       }
+
+      if (protocol) results = results.filter(p => p.project === protocol);
+      if (chain) results = results.filter(p => p.chain === chain);
 
       if (el.sort.value === "apy") results.sort((a, b) => b.apy - a.apy);
       else if (el.sort.value === "tvl") results.sort((a, b) => b.tvlUsd - a.tvlUsd);
       else results.sort((a, b) => a.project.localeCompare(b.project));
 
-      results.slice(0, 20).forEach(p => {
-        const card = document.createElement("div");
-        card.className = "pool";
-        card.innerHTML = `
-          <h3>${p.project} — ${p.symbol}</h3>
-          <div class="meta">${t.platform}: ${p.chain} | ${t.pool}: ${p.pool}</div>
-          <div class="yield">${t.apy}: ${p.apy.toFixed(2)}%</div>
+      el.container.innerHTML = "";
+      results.slice(0, 20).forEach(pool => {
+        const div = document.createElement("div");
+        div.className = "pool";
+
+        div.innerHTML = `
+          <h3>${pool.project} — ${pool.symbol}</h3>
+          <div class="meta">پلتفرم: ${pool.chain} | استخر: ${pool.pool}</div>
+          <div class="yield">سود سالانه: ${formatValue(pool.apy.toFixed(2))}%</div>
           <div class="extra">
-            ${t.tvl}: $${(p.tvlUsd || 0).toLocaleString()}<br>
-            ${t.stablecoin}: ${p.stablecoin ? "✅" : "❌"}<br>
-            ${t.rewards}: ${p.rewardTokens ? p.rewardTokens.join(", ") : "-"}
+            TVL: $${formatValue((pool.tvlUsd || 0).toLocaleString())}<br>
+            استیبل‌کوین: ${pool.stablecoin ? "✅" : "❌"}<br>
+            جوایز: ${pool.rewardTokens ? pool.rewardTokens.join(", ") : "-"}
           </div>
         `;
-        el.container.appendChild(card);
+
+        // Add chart
+        const canvas = document.createElement("canvas");
+        canvas.height = 100;
+        div.appendChild(canvas);
+        el.container.appendChild(div);
+
+        if (pool.apyBreakdown) {
+          const history = Object.entries(pool.apyBreakdown)
+            .map(([label, val]) => ({ label, val }))
+            .slice(0, 10);
+
+          new Chart(canvas.getContext("2d"), {
+            type: 'line',
+            data: {
+              labels: history.map(h => h.label),
+              datasets: [{
+                label: 'APY',
+                data: history.map(h => h.val),
+                borderColor: 'green',
+                backgroundColor: 'rgba(0,255,0,0.1)',
+                tension: 0.3,
+              }]
+            },
+            options: {
+              scales: {
+                y: {
+                  beginAtZero: true
+                }
+              },
+              plugins: {
+                legend: { display: false }
+              }
+            }
+          });
+        }
       });
 
       if (results.length === 0) {
-        el.container.innerHTML = `<p style="text-align:center;">${t.noResults}</p>`;
+        el.container.innerHTML = "<p style='text-align:center;'>نتیجه‌ای یافت نشد.</p>";
       }
     }
 
-    // Listeners
+    // Events
+    el.refresh.addEventListener("click", fetchYields);
     el.search.addEventListener("input", renderYields);
     el.sort.addEventListener("change", renderYields);
-    el.refresh.addEventListener("click", fetchYields);
-    el.lang.addEventListener("change", () => applyLanguage(el.lang.value));
-    el.themeToggle.addEventListener("click", () => applyTheme("manual"));
+    el.protocolFilter.addEventListener("change", renderYields);
+    el.chainFilter.addEventListener("change", renderYields);
+    el.themeToggle.addEventListener("click", () => applyTheme(true));
 
     // Init
     applyTheme();
-    applyLanguage("en");
     fetchYields();
   </script>
 </body>
