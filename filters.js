@@ -1,4 +1,4 @@
-// Multi-select dropdown logic
+// Multi-select dropdown logic with search, select all, deselect all
 function createMultiSelectDropdown({ id, title, values, onChange, searchable = false, loadMore = false, chunkSize = 20 }) {
   const container = document.getElementById(id);
   container.classList.add('dropdown');
@@ -9,35 +9,62 @@ function createMultiSelectDropdown({ id, title, values, onChange, searchable = f
   let selected = new Set(values);
   let displayed = [...values];
 
+  const updateSelection = () => onChange([...selected]);
+
   const renderOptions = (list) => {
     menu.innerHTML = '';
     if (searchable) {
       const input = document.createElement('input');
       input.className = 'dropdown-search';
       input.placeholder = 'Search...';
+      input.addEventListener('click', e => e.stopPropagation());
       input.oninput = () => {
         const q = input.value.toLowerCase();
         const filtered = values.filter(v => v.toLowerCase().includes(q));
         renderOptions(filtered);
       };
       menu.appendChild(input);
-      input.focus();
+      setTimeout(() => input.focus(), 0);
     }
+
+    const controlBar = document.createElement('div');
+    controlBar.style.padding = '5px 10px';
+    controlBar.innerHTML = `
+      <button type="button" style="margin-right: 5px">Select All</button>
+      <button type="button">Deselect All</button>
+    `;
+    const [selectAllBtn, deselectAllBtn] = controlBar.querySelectorAll('button');
+    selectAllBtn.onclick = (e) => {
+      e.stopPropagation();
+      selected = new Set(values);
+      updateSelection();
+      renderOptions(list);
+    };
+    deselectAllBtn.onclick = (e) => {
+      e.stopPropagation();
+      selected = new Set();
+      updateSelection();
+      renderOptions(list);
+    };
+    menu.appendChild(controlBar);
+
     list.forEach(v => {
       const label = document.createElement('label');
-      label.innerHTML = `<input type="checkbox" value="${v}" checked> ${v}`;
+      label.innerHTML = `<input type="checkbox" value="${v}" ${selected.has(v) ? 'checked' : ''}> ${v}`;
       const checkbox = label.querySelector('input');
       checkbox.onchange = () => {
         if (checkbox.checked) selected.add(v);
         else selected.delete(v);
-        onChange([...selected]);
+        updateSelection();
       };
       menu.appendChild(label);
     });
+
     if (loadMore && list.length < values.length) {
       const btn = document.createElement('button');
       btn.textContent = 'Load More';
-      btn.onclick = () => {
+      btn.onclick = (e) => {
+        e.stopPropagation();
         displayed = values.slice(0, displayed.length + chunkSize);
         renderOptions(displayed);
       };
@@ -57,10 +84,10 @@ function createMultiSelectDropdown({ id, title, values, onChange, searchable = f
     if (!container.contains(e.target)) container.classList.remove('open');
   });
 
-  onChange([...selected]);
+  updateSelection();
 }
 
-// Example usage integration
+// Main integration
 document.addEventListener('DOMContentLoaded', () => {
   let pools = [];
   let protocolSet = [], chainSet = [], tokenSet = [];
@@ -147,12 +174,14 @@ document.addEventListener('DOMContentLoaded', () => {
       id: 'protocol-dropdown',
       title: 'Protocols',
       values: protocolSet,
+      searchable: true,
       onChange: v => { selectedProtocols = v; render(); },
     });
     createMultiSelectDropdown({
       id: 'chain-dropdown',
       title: 'Chains',
       values: chainSet,
+      searchable: true,
       onChange: v => { selectedChains = v; render(); },
     });
     createMultiSelectDropdown({
