@@ -7,28 +7,24 @@ function createMultiSelectDropdown({ id, title, values, onChange, searchable = f
   const toggle = container.querySelector('.dropdown-toggle');
   const countSpan = toggle.querySelector('.count');
   const menu = container.querySelector('.dropdown-menu');
-  let selected = new Set();
+  let selected = new Set(values); // Initialize with all values selected
   let currentQuery = '';
   let isMobileKeyboardOpen = false;
 
-  // Update selection display and callback
   const updateSelection = () => {
     countSpan.textContent = selected.size;
     onChange([...selected]);
   };
 
-  // Filter and sort functionality
   const filterResults = (query) => {
     return values
       .filter(v => v.toLowerCase().includes(query.toLowerCase()))
       .sort((a, b) => a.localeCompare(b));
   };
 
-  // Render dropdown content
   const renderOptions = (filteredValues) => {
     menu.innerHTML = '';
 
-    // Search input
     if (searchable) {
       const input = document.createElement('input');
       input.className = 'dropdown-search';
@@ -53,7 +49,6 @@ function createMultiSelectDropdown({ id, title, values, onChange, searchable = f
       menu.appendChild(input);
     }
 
-    // Control buttons
     const controlBar = document.createElement('div');
     controlBar.style.cssText = `
       padding: 8px 16px;
@@ -86,7 +81,6 @@ function createMultiSelectDropdown({ id, title, values, onChange, searchable = f
 
     menu.appendChild(controlBar);
 
-    // Options list
     const listContainer = document.createElement('div');
     if (filteredValues.length === 0) {
       const noResults = document.createElement('div');
@@ -133,12 +127,10 @@ function createMultiSelectDropdown({ id, title, values, onChange, searchable = f
     menu.appendChild(listContainer);
   };
 
-  // Toggle dropdown
   toggle.addEventListener('click', (e) => {
     e.stopPropagation();
     const isOpen = container.classList.contains('open');
     
-    // Close all other dropdowns
     document.querySelectorAll('.dropdown').forEach(d => {
       if (d !== container) d.classList.remove('open');
     });
@@ -157,21 +149,19 @@ function createMultiSelectDropdown({ id, title, values, onChange, searchable = f
     }
   });
 
-  // Close dropdown when clicking outside
   document.addEventListener('click', (e) => {
     if (!container.contains(e.target)) {
       container.classList.remove('open');
     }
   });
 
-  // Handle mobile keyboard
   window.addEventListener('resize', () => {
     if (window.innerWidth > 768) {
       isMobileKeyboardOpen = false;
     }
   });
 
-  // Initial setup
+  // Initial render with all values
   renderOptions(values);
   updateSelection();
 }
@@ -251,60 +241,66 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const fetchAndInit = async () => {
     el.loader.style.display = "block";
-    const res = await fetch('https://yields.llama.fi/pools');
-    const data = await res.json();
-    pools = data.data.filter(p => p.apy > 0);
+    try {
+      const res = await fetch('https://yields.llama.fi/pools');
+      const data = await res.json();
+      pools = data.data.filter(p => p.apy > 0);
 
-    protocolSet = [...new Set(pools.map(p => p.project))].sort();
-    chainSet = [...new Set(pools.map(p => p.chain))].sort();
-    tokenSet = [...new Set(pools.map(p => p.symbol))].sort();
+      protocolSet = [...new Set(pools.map(p => p.project))].sort();
+      chainSet = [...new Set(pools.map(p => p.chain))].sort();
+      tokenSet = [...new Set(pools.map(p => p.symbol))].sort();
 
-    createMultiSelectDropdown({
-      id: 'protocol-dropdown',
-      title: 'Protocols',
-      values: protocolSet,
-      searchable: true,
-      onChange: v => { selectedProtocols = v; render(); },
-    });
-    createMultiSelectDropdown({
-      id: 'chain-dropdown',
-      title: 'Chains',
-      values: chainSet,
-      searchable: true,
-      onChange: v => { selectedChains = v; render(); },
-    });
-    createMultiSelectDropdown({
-      id: 'token-dropdown',
-      title: 'Tokens',
-      values: tokenSet,
-      searchable: true,
-      loadMore: true,
-      onChange: v => { selectedTokens = v; render(); },
-    });
+      createMultiSelectDropdown({
+        id: 'protocol-dropdown',
+        title: 'Protocols',
+        values: protocolSet,
+        searchable: true,
+        onChange: v => { selectedProtocols = v; render(); },
+      });
+      createMultiSelectDropdown({
+        id: 'chain-dropdown',
+        title: 'Chains',
+        values: chainSet,
+        searchable: true,
+        onChange: v => { selectedChains = v; render(); },
+      });
+      createMultiSelectDropdown({
+        id: 'token-dropdown',
+        title: 'Tokens',
+        values: tokenSet,
+        searchable: true,
+        onChange: v => { selectedTokens = v; render(); },
+      });
 
-    el.loader.style.display = "none";
-    render();
+      render();
+    } catch (error) {
+      console.error('Failed to fetch pools:', error);
+    } finally {
+      el.loader.style.display = "none";
+    }
   };
 
   function render() {
     el.container.innerHTML = '';
-    el.loader.style.display = 'block';
     const search = el.search.value.toLowerCase();
     const sort = el.sort.value;
 
-    let filtered = pools.filter(p =>
-      selectedProtocols.includes(p.project) &&
-      selectedChains.includes(p.chain) &&
-      selectedTokens.includes(p.symbol) &&
-      (!search || [p.project, p.symbol, p.chain, p.pool].some(v => v?.toLowerCase().includes(search)))
-    );
+    let filtered = pools.filter(p => {
+      const protocolMatch = selectedProtocols.length ? selectedProtocols.includes(p.project) : true;
+      const chainMatch = selectedChains.length ? selectedChains.includes(p.chain) : true;
+      const tokenMatch = selectedTokens.length ? selectedTokens.includes(p.symbol) : true;
+      const searchMatch = !search || [p.project, p.symbol, p.chain, p.pool]
+        .some(v => v?.toLowerCase().includes(search));
+      
+      return protocolMatch && chainMatch && tokenMatch && searchMatch;
+    });
 
     if (sort === 'apy') filtered.sort((a, b) => b.apy - a.apy);
     else if (sort === 'tvl') filtered.sort((a, b) => b.tvlUsd - a.tvlUsd);
     else filtered.sort((a, b) => a.project.localeCompare(b.project));
 
     const chunk = filtered.slice(0, 20);
-    for (const pool of chunk) {
+    chunk.forEach(pool => {
       const div = document.createElement('div');
       div.className = 'pool';
       div.innerHTML = `
@@ -318,12 +314,11 @@ document.addEventListener('DOMContentLoaded', () => {
         </div>
       `;
       el.container.appendChild(div);
-    }
+    });
 
     if (filtered.length === 0) {
       el.container.innerHTML = `<p style="text-align:center;">${t("noResults")}</p>`;
     }
-    el.loader.style.display = 'none';
   }
 
   el.search.oninput = () => render();
@@ -332,14 +327,15 @@ document.addEventListener('DOMContentLoaded', () => {
   el.lang.onchange = () => applyLanguage(el.lang.value);
   el.toggleTheme.onclick = () => applyTheme(true);
 
+  // Initial setup
   applyTheme();
   applyLanguage("en");
   fetchAndInit();
 
+  // Mobile touch handling
   document.addEventListener('touchstart', function(e) {
     if (window.innerWidth > 768) return;
     
-    // بستن dropdownها وقتی روی جای دیگری از صفحه کلیک می‌شود
     const dropdowns = document.querySelectorAll('.dropdown');
     let isDropdownClicked = false;
     
