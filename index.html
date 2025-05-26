@@ -4,17 +4,18 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>DeFi Yield Monitor</title>
+
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=Vazirmatn&family=Inter&display=swap" rel="stylesheet" />
+
   <style>
     :root {
-      --bg: #f9f9fb;
-      --text: #222;
+      --bg: #f4f4f4;
+      --text: #111;
       --card: #fff;
-      --highlight: #4caf50;
-      --font-en: 'Inter', sans-serif;
-      --font-fa: 'Vazirmatn', sans-serif;
+      --highlight: green;
+      --font: 'Inter', sans-serif;
     }
     [data-theme="dark"] {
       --bg: #121212;
@@ -23,50 +24,34 @@
       --highlight: #00e676;
     }
     [lang="fa"] {
-      --font-en: 'Vazirmatn', sans-serif;
+      --font: 'Vazirmatn', sans-serif;
     }
     body {
-      font-family: var(--font-en);
+      font-family: var(--font);
       margin: 0;
       padding: 20px;
       background: var(--bg);
       color: var(--text);
+      transition: background 0.3s, color 0.3s;
     }
     h1 {
       text-align: center;
-      font-size: 26px;
+      font-size: 24px;
     }
     #controls {
       display: flex;
       flex-wrap: wrap;
-      justify-content: center;
       gap: 10px;
+      justify-content: center;
       margin: 15px 0;
     }
-    select, input, button {
+    select, input, button, label {
       padding: 8px 12px;
       border-radius: 8px;
       border: 1px solid #ccc;
       font-size: 14px;
       background: var(--card);
       color: var(--text);
-    }
-    #token-filter-container {
-      max-height: 300px;
-      overflow-y: auto;
-      background: var(--card);
-      border: 1px solid #ccc;
-      border-radius: 8px;
-      padding: 10px;
-      width: 260px;
-    }
-    .token-checkbox {
-      display: flex;
-      align-items: center;
-      margin: 4px 0;
-    }
-    .token-checkbox input {
-      margin-right: 6px;
     }
     #yield-list {
       max-width: 960px;
@@ -96,9 +81,9 @@
       margin-top: 8px;
       color: var(--highlight);
     }
-    #load-more, #load-more-tokens {
+    #load-more {
       display: block;
-      margin: 10px auto;
+      margin: 20px auto;
       padding: 10px 20px;
       font-size: 14px;
       border-radius: 8px;
@@ -124,6 +109,11 @@
       0% { transform: rotate(0); }
       100% { transform: rotate(360deg); }
     }
+    .checkbox-group {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
   </style>
 </head>
 <body>
@@ -132,7 +122,9 @@
   <div id="controls">
     <input type="text" id="search" placeholder="Search..." />
     <select id="protocol-filter"></select>
+    <label class="checkbox-group"><input type="checkbox" id="exclude-protocols" /> Exclude</label>
     <select id="chain-filter"></select>
+    <label class="checkbox-group"><input type="checkbox" id="exclude-chains" /> Exclude</label>
     <select id="sort">
       <option value="apy">Sort by APY</option>
       <option value="tvl">Sort by TVL</option>
@@ -146,13 +138,6 @@
     <button id="toggle-theme">🌗</button>
   </div>
 
-  <div id="token-filter-container">
-    <strong>Filter by Tokens</strong>
-    <input type="text" id="token-search" placeholder="Search token..." style="width: 100%; margin: 5px 0;" />
-    <div id="token-list"></div>
-    <button id="load-more-tokens">Load More Tokens</button>
-  </div>
-
   <div id="loader" class="spinner"></div>
   <div id="yield-list"></div>
   <button id="load-more" style="display:none;">Load More</button>
@@ -161,8 +146,6 @@
     const faDigits = s => s.toString().replace(/\d/g, d => "۰۱۲۳۴۵۶۷۸۹"[d]);
     let pools = [], filtered = [], currentIndex = 0;
     const chunkSize = 20;
-    const tokenDisplayCount = 20;
-    let allTokens = [], selectedTokens = new Set(), tokenIndex = 0;
 
     const el = {
       loader: document.getElementById("loader"),
@@ -175,9 +158,8 @@
       toggleTheme: document.getElementById("toggle-theme"),
       protocol: document.getElementById("protocol-filter"),
       chain: document.getElementById("chain-filter"),
-      tokenSearch: document.getElementById("token-search"),
-      tokenList: document.getElementById("token-list"),
-      loadMoreTokens: document.getElementById("load-more-tokens"),
+      excludeProtocols: document.getElementById("exclude-protocols"),
+      excludeChains: document.getElementById("exclude-chains"),
       title: document.getElementById("title")
     };
 
@@ -226,6 +208,7 @@
       el.loadMore.textContent = t("loadMore");
       renderYields(true);
     }
+
     function applyTheme(toggle = false) {
       const isDark = document.body.getAttribute("data-theme") === "dark";
       const newTheme = toggle ? (isDark ? "light" : "dark") : (Telegram.WebApp.colorScheme || "light");
@@ -240,8 +223,6 @@
       const data = await res.json();
       pools = data.data.filter(p => p.apy > 0);
       updateFilters();
-      extractTokens();
-      renderTokens(true);
       renderYields(true);
       el.loader.style.display = "none";
     }
@@ -250,64 +231,24 @@
       const protocols = [...new Set(pools.map(p => p.project))].sort();
       const chains = [...new Set(pools.map(p => p.chain))].sort();
 
-      el.protocol.innerHTML = '<option value="">All Protocols</option>' + protocols.map(p => `<option value="${p}">${p}</option>`).join('');
-      el.chain.innerHTML = '<option value="">All Chains</option>' + chains.map(c => `<option value="${c}">${c}</option>`).join('');
-    }
+      el.protocol.innerHTML = `<option value="">${currentLang === "fa" ? "پروتکل" : "Protocol"}</option>` +
+        protocols.map(p => `<option value="${p}">${p}</option>`).join("");
 
-    function extractTokens() {
-      const symbols = new Set();
-      pools.forEach(p => {
-        if (p.symbol) symbols.add(p.symbol);
-        if (Array.isArray(p.underlyingTokens)) {
-          p.underlyingTokens.forEach(t => symbols.add(t));
-        }
-      });
-      allTokens = Array.from(symbols).sort();
-    }
-
-    function renderTokens(reset = false) {
-      if (reset) {
-        el.tokenList.innerHTML = "";
-        tokenIndex = 0;
-      }
-
-      const searchVal = el.tokenSearch.value.toLowerCase();
-      const filteredTokens = allTokens.filter(t => t.toLowerCase().includes(searchVal));
-      const nextBatch = filteredTokens.slice(tokenIndex, tokenIndex + tokenDisplayCount);
-
-      nextBatch.forEach(token => {
-        const wrapper = document.createElement("div");
-        wrapper.className = "token-checkbox";
-        const input = document.createElement("input");
-        input.type = "checkbox";
-        input.value = token;
-        input.checked = selectedTokens.has(token);
-        input.onchange = () => {
-          if (input.checked) selectedTokens.add(token);
-          else selectedTokens.delete(token);
-          renderYields(true);
-        };
-        wrapper.appendChild(input);
-        wrapper.appendChild(document.createTextNode(token));
-        el.tokenList.appendChild(wrapper);
-      });
-
-      tokenIndex += tokenDisplayCount;
+      el.chain.innerHTML = `<option value="">${currentLang === "fa" ? "چین" : "Chain"}</option>` +
+        chains.map(c => `<option value="${c}">${c}</option>`).join("");
     }
 
     function getFilteredSorted() {
       const q = el.search.value.toLowerCase();
-      const protocol = el.protocol.value;
-      const chain = el.chain.value;
-      const selectedTokenArr = Array.from(selectedTokens);
+      const selectedProtocol = el.protocol.value;
+      const selectedChain = el.chain.value;
+      const excludeProtocols = el.excludeProtocols.checked;
+      const excludeChains = el.excludeChains.checked;
 
       let list = pools.filter(p =>
         (!q || [p.project, p.symbol, p.chain, p.pool].some(v => v?.toLowerCase().includes(q))) &&
-        (!protocol || p.project === protocol) &&
-        (!chain || p.chain === chain) &&
-        (selectedTokenArr.length === 0 || selectedTokenArr.some(t =>
-          p.symbol === t || (p.underlyingTokens && p.underlyingTokens.includes(t))
-        ))
+        (!selectedProtocol || (excludeProtocols ? p.project !== selectedProtocol : p.project === selectedProtocol)) &&
+        (!selectedChain || (excludeChains ? p.chain !== selectedChain : p.chain === selectedChain))
       );
 
       if (el.sort.value === "apy") list.sort((a, b) => b.apy - a.apy);
@@ -349,21 +290,17 @@
       }
     }
 
-    // Event bindings
+    // Events
     el.refresh.onclick = fetchYields;
     el.loadMore.onclick = () => renderYields(false);
     el.search.oninput = () => renderYields(true);
     el.sort.onchange = () => renderYields(true);
     el.protocol.onchange = () => renderYields(true);
     el.chain.onchange = () => renderYields(true);
+    el.excludeProtocols.onchange = () => renderYields(true);
+    el.excludeChains.onchange = () => renderYields(true);
     el.lang.onchange = () => applyLanguage(el.lang.value);
     el.toggleTheme.onclick = () => applyTheme(true);
-    el.tokenSearch.oninput = () => {
-      el.tokenList.innerHTML = "";
-      tokenIndex = 0;
-      renderTokens(true);
-    };
-    el.loadMoreTokens.onclick = () => renderTokens(false);
 
     // Init
     applyTheme();
