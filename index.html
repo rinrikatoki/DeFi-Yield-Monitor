@@ -7,37 +7,34 @@
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <style>
     body {
-      font-family: 'Roboto', sans-serif; /* Example font */
+      font-family: sans-serif;
       margin: 0;
-      padding: 25px;
-      background-color: #f9fafb; /* Light background */
-      color: #343a40; /* Darker text */
+      padding: 20px;
+      background: #f4f4f4;
+      color: #333;
+      transition: background .5s ease, color .5s ease; /* Smooth transition */
     }
 
     h1 {
       text-align: center;
-      font-size: 28px;
-      margin-bottom: 20px;
+      font-size: 24px;
     }
 
     #yield-list {
       max-width: 900px;
       margin: 0 auto;
-      overflow-y: scroll; /* Add scrolling if needed */
-      height: 500px; /* Set a fixed height for the list */
     }
 
     .pool {
-      background: #fff;
-      border-radius: 15px;
-      padding: 20px;
-      margin-bottom: 16px;
-      box-shadow: 0 3px 7px rgba(0, 0, 0, 0.1);
+      background: white;
+      border-radius: 10px;
+      padding: 15px;
+      margin-bottom: 12px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
     }
 
     .pool h3 {
-      margin: 0 0 12px;
-      font-size: 20px;
+      margin: 0 0 10px;
     }
 
     .pool .meta {
@@ -46,7 +43,7 @@
     }
 
     .pool .yield {
-      font-size: 20px;
+      font-size: 18px;
       font-weight: bold;
       color: green;
     }
@@ -57,39 +54,102 @@
       font-size: 18px;
     }
 
-    /* Dark Mode Styles (Toggleable) */
+    /* Dark Mode Styles */
     body.dark-mode {
-        background-color: #222;
+      background: #222;
+      color: #eee;
+    }
+
+    #yield-list {
+        max-width: 900px;
+        margin: 0 auto;
+    }
+
+    .pool {
+        background: #333;
+        border-radius: 10px;
+        padding: 15px;
+        margin-bottom: 12px;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+    }
+
+    .pool h3 {
+        margin: 0 0 10px;
         color: #eee;
     }
 
-    h1.dark-mode {
-        color: #fff;
+    .pool .meta {
+        font-size: 14px;
+        color: #999;
     }
 
-    #yield-list.dark-mode {
-        background-color: #333;
-    }
-
-    .pool.dark-mode {
-        background-color: #444;
-        border-radius: 15px;
-        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
-    }
-
-    .pool h3.dark-mode {
-        color: #fff;
-    }
-
-    .pool .yield.dark-mode {
+    .pool .yield {
+        font-size: 18px;
+        font-weight: bold;
         color: green;
     }
+
+    #loader {
+        text-align: center;
+        margin-top: 40px;
+        font-size: 18px;
+        color: #eee;
+    }
+
+
+    /* Search Bar */
+    .search-container {
+      display: flex;
+      margin-bottom: 20px;
+    }
+
+    .search-input {
+      flex: 1;
+      padding: 8px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+    }
+
+    .search-button {
+      background-color: #4CAF50;
+      color: white;
+      padding: 8px 16px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+
+    /* Pagination */
+    .pagination {
+      display: flex;
+      justify-content: center;
+    }
+
+    .pagination button {
+      background-color: #f2f2f2;
+      border: none;
+      color: #333;
+      padding: 8px 16px;
+      margin: 0 4px;
+      cursor: pointer;
+      transition: background-color .3s ease;
+    }
+
+    .pagination button:hover {
+      background-color: #ddd;
+    }
+
   </style>
 </head>
 <body>
   <h1>Top DeFi Yields</h1>
   <div id="loader">Loading yields...</div>
   <div id="yield-list"></div>
+
+  <div class="search-container">
+    <input type="text" id="searchInput" placeholder="Search pools...">
+    <button id="searchButton">Search</button>
+  </div>
 
   <script>
     async function fetchYields() {
@@ -101,6 +161,9 @@
     function renderYields(pools) {
       const container = document.getElementById("yield-list");
       const loader = document.getElementById("loader");
+      const searchInput = document.getElementById("searchInput");
+      const searchButton = document.getElementById("searchButton");
+
       loader.style.display = "none";
 
       // Sort by highest APY first
@@ -123,9 +186,64 @@
       });
     }
 
+    function applySearch(pools, searchTerm) {
+      searchTerm = searchTerm.toLowerCase();
+      return pools.filter(pool =>
+        pool.project.toLowerCase().includes(searchTerm) ||
+        pool.symbol.toLowerCase().includes(searchTerm) ||
+        pool.chain.toLowerCase().includes(searchTerm)
+      );
+    }
+
+    function renderPagination(pools, page, pageSize = 10) {
+      const container = document.getElementById("yield-list");
+      container.innerHTML = ""; // Clear existing content
+
+      const startIndex = (page - 1) * pageSize;
+      const endIndex = startIndex + pageSize;
+
+      const paginatedPools = pools.slice(startIndex, endIndex);
+
+      paginatedPools.forEach(pool => {
+        if (!pool.apy || pool.apy <= 0) return;
+
+        const el = document.createElement("div");
+        el.className = "pool";
+        el.innerHTML = `
+          <h3>${pool.project} — ${pool.symbol}</h3>
+          <div class="meta">
+            Platform: ${pool.chain} | Pool: ${pool.pool}
+          </div>
+          <div class="yield">APY: ${pool.apy.toFixed(2)}%</div>
+        `;
+        container.appendChild(el);
+      });
+
+      // Add pagination buttons
+      const paginationContainer = document.createElement("div");
+      paginationContainer.className = "pagination";
+
+      for (let i = 1; i <= Math.ceil(pools.length / pageSize); i++) {
+        const button = document.createElement("button");
+        button.textContent = i;
+        button.addEventListener("click", () => renderPagination(pools, i));
+        paginationContainer.appendChild(button);
+      }
+
+      container.parentNode.insertBefore(paginationContainer, container.nextSibling);
+    }
+
+
     (async () => {
       const pools = await fetchYields();
       renderYields(pools);
+
+      // Event listeners for search and pagination
+      searchInput.addEventListener("input", async (e) => {
+        const searchTerm = e.target.value;
+        const filteredPools = applySearch(pools, searchTerm);
+        renderPagination(filteredPools);
+      });
     })();
   </script>
 </body>
