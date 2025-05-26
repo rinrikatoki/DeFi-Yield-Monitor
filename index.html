@@ -9,21 +9,17 @@
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
-  <!-- PWA manifest -->
-  <link rel="manifest" href="/manifest.json" />
-  <link rel="apple-touch-icon" href="/icon-192.png" />
-  <meta name="theme-color" content="#ffffff" />
-
-  <!-- Persian font -->
-  <link href="https://fonts.googleapis.com/css2?family=Vazirmatn&display=swap" rel="stylesheet">
+  <!-- Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter&family=Vazirmatn&display=swap" rel="stylesheet" />
 
   <style>
     :root {
-      --bg: #f4f4f4;
-      --text: #111;
+      --bg: #f9f9fb;
+      --text: #222;
       --card: #fff;
-      --highlight: green;
-      --font: 'Segoe UI', sans-serif;
+      --highlight: #4caf50;
+      --font-en: 'Inter', sans-serif;
+      --font-fa: 'Vazirmatn', sans-serif;
     }
     [data-theme="dark"] {
       --bg: #121212;
@@ -32,73 +28,106 @@
       --highlight: #00e676;
     }
     [lang="fa"] {
-      --font: 'Vazirmatn', sans-serif;
+      --font-en: 'Vazirmatn', sans-serif;
     }
+
     body {
-      font-family: var(--font);
+      font-family: var(--font-en);
       margin: 0;
       padding: 20px;
       background: var(--bg);
       color: var(--text);
+      transition: background 0.3s, color 0.3s;
     }
+
     h1 {
       text-align: center;
-      font-size: 24px;
+      font-size: 26px;
     }
+
     #controls {
       display: flex;
       flex-wrap: wrap;
-      gap: 10px;
       justify-content: center;
-      margin: 15px 0;
+      gap: 12px;
+      margin: 20px 0;
     }
+
     select, input, button {
-      padding: 8px 12px;
-      border-radius: 8px;
-      border: 1px solid #ccc;
+      padding: 10px;
       font-size: 14px;
+      border-radius: 10px;
+      border: 1px solid #ccc;
       background: var(--card);
       color: var(--text);
     }
-    #yield-list {
-      max-width: 960px;
-      margin: auto;
-    }
+
     .pool {
       background: var(--card);
-      border-radius: 12px;
-      padding: 16px;
-      margin-bottom: 14px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      border-radius: 16px;
+      padding: 18px;
+      margin: 14px auto;
+      max-width: 800px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+      transition: transform 0.2s;
     }
+
+    .pool:hover {
+      transform: scale(1.015);
+    }
+
     .pool h3 {
-      margin: 0 0 8px;
+      margin: 0 0 10px;
+      font-size: 18px;
     }
+
     .meta, .extra {
       font-size: 13px;
-      color: #777;
+      color: #888;
     }
+
     .yield {
+      margin-top: 10px;
       font-size: 16px;
       font-weight: bold;
-      margin-top: 8px;
       color: var(--highlight);
     }
+
     #load-more {
       display: block;
-      margin: 20px auto;
-      padding: 10px 20px;
-      font-size: 14px;
-      border-radius: 8px;
+      margin: 25px auto;
+      padding: 12px 24px;
       background: var(--highlight);
-      color: white;
+      color: #fff;
+      font-weight: bold;
       border: none;
+      border-radius: 10px;
       cursor: pointer;
     }
+
+    #load-more:hover {
+      opacity: 0.9;
+    }
+
     #loader {
       text-align: center;
       font-size: 18px;
       margin-top: 30px;
+    }
+
+    .spinner {
+      border: 4px solid #f3f3f3;
+      border-top: 4px solid var(--highlight);
+      border-radius: 50%;
+      width: 28px;
+      height: 28px;
+      animation: spin 1s linear infinite;
+      margin: 20px auto;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
     }
   </style>
 </head>
@@ -107,34 +136,22 @@
 
   <div id="controls">
     <input type="text" id="search" placeholder="Search..." />
-    <select id="protocol-filter"></select>
-    <select id="chain-filter"></select>
+    <select id="protocol-filter" multiple></select>
+    <select id="chain-filter" multiple></select>
     <select id="sort">
       <option value="apy">Sort by APY</option>
       <option value="tvl">Sort by TVL</option>
       <option value="name">Sort by Name</option>
     </select>
-    <select id="lang">
-      <option value="en">English</option>
-      <option value="fa">فارسی</option>
-    </select>
-    <button id="refresh">🔄</button>
+    <button id="refresh">🔄 Refresh</button>
     <button id="toggle-theme">🌗</button>
-    <button id="install-app" style="display:none;">📲 Install App</button>
   </div>
 
-  <div id="loader">Loading...</div>
+  <div id="loader" class="spinner"></div>
   <div id="yield-list"></div>
   <button id="load-more" style="display:none;">Load More</button>
 
   <script>
-    const faDigits = s => s.toString().replace(/\d/g, d => "۰۱۲۳۴۵۶۷۸۹"[d]);
-    let pools = [];
-    let filtered = [];
-    let currentIndex = 0;
-    const chunkSize = 20;
-    let deferredPrompt = null;
-
     const el = {
       loader: document.getElementById("loader"),
       container: document.getElementById("yield-list"),
@@ -142,70 +159,13 @@
       search: document.getElementById("search"),
       sort: document.getElementById("sort"),
       refresh: document.getElementById("refresh"),
-      lang: document.getElementById("lang"),
       toggleTheme: document.getElementById("toggle-theme"),
-      installBtn: document.getElementById("install-app"),
       protocol: document.getElementById("protocol-filter"),
       chain: document.getElementById("chain-filter"),
-      title: document.getElementById("title")
     };
 
-    const translations = {
-      en: {
-        title: "Top DeFi Yields",
-        loading: "Loading...",
-        searchPlaceholder: "Search...",
-        loadMore: "Load More",
-        platform: "Platform",
-        pool: "Pool",
-        apy: "APY",
-        tvl: "TVL",
-        stablecoin: "Stablecoin",
-        rewards: "Rewards",
-        noResults: "No results found.",
-        install: "Install App"
-      },
-      fa: {
-        title: "بیشترین سودهای دیفای",
-        loading: "در حال بارگذاری...",
-        searchPlaceholder: "جستجو...",
-        loadMore: "بیشتر",
-        platform: "پلتفرم",
-        pool: "استخر",
-        apy: "سود سالانه",
-        tvl: "TVL",
-        stablecoin: "استیبل‌کوین",
-        rewards: "جوایز",
-        noResults: "نتیجه‌ای یافت نشد.",
-        install: "نصب اپ"
-      }
-    };
-
-    let currentLang = "en";
-    function t(key) {
-      return translations[currentLang][key];
-    }
-
-    function format(val) {
-      return currentLang === "fa" ? faDigits(val) : val;
-    }
-
-    function applyLanguage(lang) {
-      currentLang = lang;
-      document.documentElement.lang = lang;
-      document.documentElement.dir = lang === "fa" ? "rtl" : "ltr";
-      el.title.textContent = t("title");
-      el.search.placeholder = t("searchPlaceholder");
-      el.loadMore.textContent = t("loadMore");
-      el.installBtn.textContent = t("install");
-      renderYields(true);
-    }
-
-    function applyTheme(toggle = false) {
-      const isDark = document.body.getAttribute("data-theme") === "dark";
-      const newTheme = toggle ? (isDark ? "light" : "dark") : (Telegram.WebApp.colorScheme || "light");
-      document.body.setAttribute("data-theme", newTheme);
-    }
+    let pools = [], filtered = [], currentIndex = 0;
+    const chunkSize = 20;
 
     async function fetchYields() {
       el.loader.style.display = "block";
@@ -222,16 +182,24 @@
     function updateFilters() {
       const protocols = [...new Set(pools.map(p => p.project))].sort();
       const chains = [...new Set(pools.map(p => p.chain))].sort();
-      el.protocol.innerHTML = `<option value="">${currentLang === "fa" ? "پروتکل" : "Protocol"}</option>` + protocols.map(p => `<option value="${p}">${p}</option>`).join("");
-      el.chain.innerHTML = `<option value="">${currentLang === "fa" ? "چین" : "Chain"}</option>` + chains.map(p => `<option value="${p}">${p}</option>`).join("");
+
+      el.protocol.innerHTML = protocols.map(p => `<option value="${p}">${p}</option>`).join("");
+      el.chain.innerHTML = chains.map(c => `<option value="${c}">${c}</option>`).join("");
+    }
+
+    function getExcludedValues(selectEl) {
+      return Array.from(selectEl.selectedOptions).map(opt => opt.value);
     }
 
     function getFilteredSorted() {
       const q = el.search.value.toLowerCase();
+      const excludedProtocols = getExcludedValues(el.protocol);
+      const excludedChains = getExcludedValues(el.chain);
+
       let list = pools.filter(p =>
         (!q || [p.project, p.symbol, p.chain, p.pool].some(v => v?.toLowerCase().includes(q))) &&
-        (!el.protocol.value || p.project === el.protocol.value) &&
-        (!el.chain.value || p.chain === el.chain.value)
+        !excludedProtocols.includes(p.project) &&
+        !excludedChains.includes(p.chain)
       );
 
       if (el.sort.value === "apy") list.sort((a, b) => b.apy - a.apy);
@@ -248,66 +216,47 @@
         filtered = getFilteredSorted();
       }
 
-      const slice = filtered.slice(currentIndex, currentIndex + 20);
+      const slice = filtered.slice(currentIndex, currentIndex + chunkSize);
       slice.forEach(pool => {
         const card = document.createElement("div");
         card.className = "pool";
         card.innerHTML = `
           <h3>${pool.project} — ${pool.symbol}</h3>
-          <div class="meta">${t("platform")}: ${pool.chain} | ${t("pool")}: ${pool.pool}</div>
-          <div class="yield">${t("apy")}: ${format(pool.apy.toFixed(2))}%</div>
+          <div class="meta">${pool.chain} | ${pool.pool}</div>
+          <div class="yield">APY: ${pool.apy.toFixed(2)}%</div>
           <div class="extra">
-            ${t("tvl")}: $${format((pool.tvlUsd || 0).toLocaleString())}<br>
-            ${t("stablecoin")}: ${pool.stablecoin ? "✅" : "❌"}<br>
-            ${t("rewards")}: ${pool.rewardTokens ? pool.rewardTokens.join(", ") : "-"}
+            TVL: $${(pool.tvlUsd || 0).toLocaleString()}<br>
+            Rewards: ${pool.rewardTokens ? pool.rewardTokens.join(", ") : "-"}
           </div>
         `;
         el.container.appendChild(card);
       });
 
-      currentIndex += 20;
+      currentIndex += chunkSize;
       el.loadMore.style.display = currentIndex < filtered.length ? "block" : "none";
 
       if (filtered.length === 0) {
-        el.container.innerHTML = `<p style="text-align:center;">${t("noResults")}</p>`;
+        el.container.innerHTML = `<p style="text-align:center;">No results found.</p>`;
       }
     }
 
-    // PWA Install Prompt
-    window.addEventListener('beforeinstallprompt', (e) => {
-      e.preventDefault();
-      deferredPrompt = e;
-      el.installBtn.style.display = "inline-block";
-    });
+    function applyTheme(toggle = false) {
+      const isDark = document.body.getAttribute("data-theme") === "dark";
+      const newTheme = toggle ? (isDark ? "light" : "dark") : (Telegram.WebApp.colorScheme || "light");
+      document.body.setAttribute("data-theme", newTheme);
+    }
 
-    el.installBtn.addEventListener('click', () => {
-      if (deferredPrompt) {
-        deferredPrompt.prompt();
-        deferredPrompt.userChoice.then(() => {
-          deferredPrompt = null;
-          el.installBtn.style.display = "none";
-        });
-      }
-    });
-
-    // Event bindings
+    // Events
     el.refresh.onclick = fetchYields;
     el.loadMore.onclick = () => renderYields(false);
     el.search.oninput = () => renderYields(true);
     el.sort.onchange = () => renderYields(true);
     el.protocol.onchange = () => renderYields(true);
     el.chain.onchange = () => renderYields(true);
-    el.lang.onchange = () => applyLanguage(el.lang.value);
     el.toggleTheme.onclick = () => applyTheme(true);
 
-    // Init
     applyTheme();
-    applyLanguage("en");
     fetchYields();
-
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/service-worker.js');
-    }
   </script>
 </body>
 </html>
