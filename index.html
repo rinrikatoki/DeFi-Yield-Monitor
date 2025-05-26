@@ -5,21 +5,17 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>DeFi Yield Monitor</title>
 
-  <!-- Telegram & Chart.js -->
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-
-  <!-- Fonts -->
-  <link href="https://fonts.googleapis.com/css2?family=Inter&family=Vazirmatn&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Vazirmatn&family=Inter&display=swap" rel="stylesheet" />
 
   <style>
     :root {
-      --bg: #f9f9fb;
-      --text: #222;
+      --bg: #f4f4f4;
+      --text: #111;
       --card: #fff;
-      --highlight: #4caf50;
-      --font-en: 'Inter', sans-serif;
-      --font-fa: 'Vazirmatn', sans-serif;
+      --highlight: green;
+      --font: 'Inter', sans-serif;
     }
     [data-theme="dark"] {
       --bg: #121212;
@@ -28,106 +24,95 @@
       --highlight: #00e676;
     }
     [lang="fa"] {
-      --font-en: 'Vazirmatn', sans-serif;
+      --font: 'Vazirmatn', sans-serif;
     }
-
     body {
-      font-family: var(--font-en);
+      font-family: var(--font);
       margin: 0;
       padding: 20px;
       background: var(--bg);
       color: var(--text);
       transition: background 0.3s, color 0.3s;
     }
-
     h1 {
       text-align: center;
-      font-size: 26px;
+      font-size: 24px;
     }
-
     #controls {
       display: flex;
       flex-wrap: wrap;
+      gap: 10px;
       justify-content: center;
-      gap: 12px;
-      margin: 20px 0;
+      margin: 15px 0;
     }
-
-    select, input, button {
-      padding: 10px;
-      font-size: 14px;
-      border-radius: 10px;
+    select, input, button, label {
+      padding: 8px 12px;
+      border-radius: 8px;
       border: 1px solid #ccc;
+      font-size: 14px;
       background: var(--card);
       color: var(--text);
     }
-
+    #yield-list {
+      max-width: 960px;
+      margin: auto;
+    }
     .pool {
       background: var(--card);
-      border-radius: 16px;
-      padding: 18px;
-      margin: 14px auto;
-      max-width: 800px;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 14px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
       transition: transform 0.2s;
     }
-
     .pool:hover {
-      transform: scale(1.015);
+      transform: scale(1.01);
     }
-
     .pool h3 {
-      margin: 0 0 10px;
-      font-size: 18px;
+      margin: 0 0 8px;
     }
-
     .meta, .extra {
       font-size: 13px;
-      color: #888;
+      color: #777;
     }
-
     .yield {
-      margin-top: 10px;
       font-size: 16px;
       font-weight: bold;
+      margin-top: 8px;
       color: var(--highlight);
     }
-
     #load-more {
       display: block;
-      margin: 25px auto;
-      padding: 12px 24px;
+      margin: 20px auto;
+      padding: 10px 20px;
+      font-size: 14px;
+      border-radius: 8px;
       background: var(--highlight);
-      color: #fff;
-      font-weight: bold;
+      color: white;
       border: none;
-      border-radius: 10px;
       cursor: pointer;
     }
-
-    #load-more:hover {
-      opacity: 0.9;
-    }
-
     #loader {
       text-align: center;
-      font-size: 18px;
       margin-top: 30px;
     }
-
     .spinner {
-      border: 4px solid #f3f3f3;
-      border-top: 4px solid var(--highlight);
-      border-radius: 50%;
       width: 28px;
       height: 28px;
+      border: 4px solid #ccc;
+      border-top: 4px solid var(--highlight);
+      border-radius: 50%;
       animation: spin 1s linear infinite;
-      margin: 20px auto;
+      margin: auto;
     }
-
     @keyframes spin {
-      0% { transform: rotate(0deg); }
+      0% { transform: rotate(0); }
       100% { transform: rotate(360deg); }
+    }
+    .checkbox-group {
+      display: flex;
+      align-items: center;
+      gap: 5px;
     }
   </style>
 </head>
@@ -136,14 +121,20 @@
 
   <div id="controls">
     <input type="text" id="search" placeholder="Search..." />
-    <select id="protocol-filter" multiple></select>
-    <select id="chain-filter" multiple></select>
+    <select id="protocol-filter"></select>
+    <label class="checkbox-group"><input type="checkbox" id="exclude-protocols" /> Exclude</label>
+    <select id="chain-filter"></select>
+    <label class="checkbox-group"><input type="checkbox" id="exclude-chains" /> Exclude</label>
     <select id="sort">
       <option value="apy">Sort by APY</option>
       <option value="tvl">Sort by TVL</option>
       <option value="name">Sort by Name</option>
     </select>
-    <button id="refresh">🔄 Refresh</button>
+    <select id="lang">
+      <option value="en">English</option>
+      <option value="fa">فارسی</option>
+    </select>
+    <button id="refresh">🔄</button>
     <button id="toggle-theme">🌗</button>
   </div>
 
@@ -152,6 +143,10 @@
   <button id="load-more" style="display:none;">Load More</button>
 
   <script>
+    const faDigits = s => s.toString().replace(/\d/g, d => "۰۱۲۳۴۵۶۷۸۹"[d]);
+    let pools = [], filtered = [], currentIndex = 0;
+    const chunkSize = 20;
+
     const el = {
       loader: document.getElementById("loader"),
       container: document.getElementById("yield-list"),
@@ -159,13 +154,66 @@
       search: document.getElementById("search"),
       sort: document.getElementById("sort"),
       refresh: document.getElementById("refresh"),
+      lang: document.getElementById("lang"),
       toggleTheme: document.getElementById("toggle-theme"),
       protocol: document.getElementById("protocol-filter"),
       chain: document.getElementById("chain-filter"),
+      excludeProtocols: document.getElementById("exclude-protocols"),
+      excludeChains: document.getElementById("exclude-chains"),
+      title: document.getElementById("title")
     };
 
-    let pools = [], filtered = [], currentIndex = 0;
-    const chunkSize = 20;
+    const translations = {
+      en: {
+        title: "Top DeFi Yields",
+        loading: "Loading...",
+        searchPlaceholder: "Search...",
+        loadMore: "Load More",
+        platform: "Platform",
+        pool: "Pool",
+        apy: "APY",
+        tvl: "TVL",
+        stablecoin: "Stablecoin",
+        rewards: "Rewards",
+        noResults: "No results found."
+      },
+      fa: {
+        title: "بیشترین سودهای دیفای",
+        loading: "در حال بارگذاری...",
+        searchPlaceholder: "جستجو...",
+        loadMore: "بیشتر",
+        platform: "پلتفرم",
+        pool: "استخر",
+        apy: "سود سالانه",
+        tvl: "TVL",
+        stablecoin: "استیبل‌کوین",
+        rewards: "جوایز",
+        noResults: "نتیجه‌ای یافت نشد."
+      }
+    };
+
+    let currentLang = "en";
+    function t(key) {
+      return translations[currentLang][key];
+    }
+    function format(val) {
+      return currentLang === "fa" ? faDigits(val) : val;
+    }
+    function applyLanguage(lang) {
+      currentLang = lang;
+      document.documentElement.lang = lang;
+      document.documentElement.dir = lang === "fa" ? "rtl" : "ltr";
+      el.title.textContent = t("title");
+      el.search.placeholder = t("searchPlaceholder");
+      el.loadMore.textContent = t("loadMore");
+      renderYields(true);
+    }
+
+    function applyTheme(toggle = false) {
+      const isDark = document.body.getAttribute("data-theme") === "dark";
+      const newTheme = toggle ? (isDark ? "light" : "dark") : (Telegram.WebApp.colorScheme || "light");
+      document.body.setAttribute("data-theme", newTheme);
+    }
 
     async function fetchYields() {
       el.loader.style.display = "block";
@@ -183,23 +231,24 @@
       const protocols = [...new Set(pools.map(p => p.project))].sort();
       const chains = [...new Set(pools.map(p => p.chain))].sort();
 
-      el.protocol.innerHTML = protocols.map(p => `<option value="${p}">${p}</option>`).join("");
-      el.chain.innerHTML = chains.map(c => `<option value="${c}">${c}</option>`).join("");
-    }
+      el.protocol.innerHTML = `<option value="">${currentLang === "fa" ? "پروتکل" : "Protocol"}</option>` +
+        protocols.map(p => `<option value="${p}">${p}</option>`).join("");
 
-    function getExcludedValues(selectEl) {
-      return Array.from(selectEl.selectedOptions).map(opt => opt.value);
+      el.chain.innerHTML = `<option value="">${currentLang === "fa" ? "چین" : "Chain"}</option>` +
+        chains.map(c => `<option value="${c}">${c}</option>`).join("");
     }
 
     function getFilteredSorted() {
       const q = el.search.value.toLowerCase();
-      const excludedProtocols = getExcludedValues(el.protocol);
-      const excludedChains = getExcludedValues(el.chain);
+      const selectedProtocol = el.protocol.value;
+      const selectedChain = el.chain.value;
+      const excludeProtocols = el.excludeProtocols.checked;
+      const excludeChains = el.excludeChains.checked;
 
       let list = pools.filter(p =>
         (!q || [p.project, p.symbol, p.chain, p.pool].some(v => v?.toLowerCase().includes(q))) &&
-        !excludedProtocols.includes(p.project) &&
-        !excludedChains.includes(p.chain)
+        (!selectedProtocol || (excludeProtocols ? p.project !== selectedProtocol : p.project === selectedProtocol)) &&
+        (!selectedChain || (excludeChains ? p.chain !== selectedChain : p.chain === selectedChain))
       );
 
       if (el.sort.value === "apy") list.sort((a, b) => b.apy - a.apy);
@@ -222,11 +271,12 @@
         card.className = "pool";
         card.innerHTML = `
           <h3>${pool.project} — ${pool.symbol}</h3>
-          <div class="meta">${pool.chain} | ${pool.pool}</div>
-          <div class="yield">APY: ${pool.apy.toFixed(2)}%</div>
+          <div class="meta">${t("platform")}: ${pool.chain} | ${t("pool")}: ${pool.pool}</div>
+          <div class="yield">${t("apy")}: ${format(pool.apy.toFixed(2))}%</div>
           <div class="extra">
-            TVL: $${(pool.tvlUsd || 0).toLocaleString()}<br>
-            Rewards: ${pool.rewardTokens ? pool.rewardTokens.join(", ") : "-"}
+            ${t("tvl")}: $${format((pool.tvlUsd || 0).toLocaleString())}<br>
+            ${t("stablecoin")}: ${pool.stablecoin ? "✅" : "❌"}<br>
+            ${t("rewards")}: ${pool.rewardTokens ? pool.rewardTokens.join(", ") : "-"}
           </div>
         `;
         el.container.appendChild(card);
@@ -236,14 +286,8 @@
       el.loadMore.style.display = currentIndex < filtered.length ? "block" : "none";
 
       if (filtered.length === 0) {
-        el.container.innerHTML = `<p style="text-align:center;">No results found.</p>`;
+        el.container.innerHTML = `<p style="text-align:center;">${t("noResults")}</p>`;
       }
-    }
-
-    function applyTheme(toggle = false) {
-      const isDark = document.body.getAttribute("data-theme") === "dark";
-      const newTheme = toggle ? (isDark ? "light" : "dark") : (Telegram.WebApp.colorScheme || "light");
-      document.body.setAttribute("data-theme", newTheme);
     }
 
     // Events
@@ -253,9 +297,14 @@
     el.sort.onchange = () => renderYields(true);
     el.protocol.onchange = () => renderYields(true);
     el.chain.onchange = () => renderYields(true);
+    el.excludeProtocols.onchange = () => renderYields(true);
+    el.excludeChains.onchange = () => renderYields(true);
+    el.lang.onchange = () => applyLanguage(el.lang.value);
     el.toggleTheme.onclick = () => applyTheme(true);
 
+    // Init
     applyTheme();
+    applyLanguage("en");
     fetchYields();
   </script>
 </body>
