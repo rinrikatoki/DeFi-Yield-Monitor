@@ -120,6 +120,7 @@
     </select>
     <button id="refresh">🔄</button>
     <button id="toggle-theme">🌗</button>
+    <button id="install-app" style="display:none;">📲 Install App</button>
   </div>
 
   <div id="loader">Loading...</div>
@@ -132,6 +133,7 @@
     let filtered = [];
     let currentIndex = 0;
     const chunkSize = 20;
+    let deferredPrompt = null;
 
     const el = {
       loader: document.getElementById("loader"),
@@ -142,6 +144,7 @@
       refresh: document.getElementById("refresh"),
       lang: document.getElementById("lang"),
       toggleTheme: document.getElementById("toggle-theme"),
+      installBtn: document.getElementById("install-app"),
       protocol: document.getElementById("protocol-filter"),
       chain: document.getElementById("chain-filter"),
       title: document.getElementById("title")
@@ -160,6 +163,7 @@
         stablecoin: "Stablecoin",
         rewards: "Rewards",
         noResults: "No results found.",
+        install: "Install App"
       },
       fa: {
         title: "بیشترین سودهای دیفای",
@@ -173,6 +177,7 @@
         stablecoin: "استیبل‌کوین",
         rewards: "جوایز",
         noResults: "نتیجه‌ای یافت نشد.",
+        install: "نصب اپ"
       }
     };
 
@@ -192,6 +197,7 @@
       el.title.textContent = t("title");
       el.search.placeholder = t("searchPlaceholder");
       el.loadMore.textContent = t("loadMore");
+      el.installBtn.textContent = t("install");
       renderYields(true);
     }
 
@@ -220,23 +226,29 @@
       el.chain.innerHTML = `<option value="">${currentLang === "fa" ? "چین" : "Chain"}</option>` + chains.map(p => `<option value="${p}">${p}</option>`).join("");
     }
 
-    function getFiltered() {
+    function getFilteredSorted() {
       const q = el.search.value.toLowerCase();
-      return pools.filter(p =>
+      let list = pools.filter(p =>
         (!q || [p.project, p.symbol, p.chain, p.pool].some(v => v?.toLowerCase().includes(q))) &&
         (!el.protocol.value || p.project === el.protocol.value) &&
         (!el.chain.value || p.chain === el.chain.value)
       );
+
+      if (el.sort.value === "apy") list.sort((a, b) => b.apy - a.apy);
+      else if (el.sort.value === "tvl") list.sort((a, b) => b.tvlUsd - a.tvlUsd);
+      else list.sort((a, b) => a.project.localeCompare(b.project));
+
+      return list;
     }
 
     function renderYields(reset = false) {
       if (reset) {
         el.container.innerHTML = "";
         currentIndex = 0;
-        filtered = getFiltered();
+        filtered = getFilteredSorted();
       }
 
-      const slice = filtered.slice(currentIndex, currentIndex + chunkSize);
+      const slice = filtered.slice(currentIndex, currentIndex + 20);
       slice.forEach(pool => {
         const card = document.createElement("div");
         card.className = "pool";
@@ -253,13 +265,30 @@
         el.container.appendChild(card);
       });
 
-      currentIndex += chunkSize;
+      currentIndex += 20;
       el.loadMore.style.display = currentIndex < filtered.length ? "block" : "none";
 
       if (filtered.length === 0) {
         el.container.innerHTML = `<p style="text-align:center;">${t("noResults")}</p>`;
       }
     }
+
+    // PWA Install Prompt
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredPrompt = e;
+      el.installBtn.style.display = "inline-block";
+    });
+
+    el.installBtn.addEventListener('click', () => {
+      if (deferredPrompt) {
+        deferredPrompt.prompt();
+        deferredPrompt.userChoice.then(() => {
+          deferredPrompt = null;
+          el.installBtn.style.display = "none";
+        });
+      }
+    });
 
     // Event bindings
     el.refresh.onclick = fetchYields;
@@ -276,7 +305,6 @@
     applyLanguage("en");
     fetchYields();
 
-    // PWA Service Worker
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('/service-worker.js');
     }
