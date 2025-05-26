@@ -25,11 +25,20 @@ function createMultiSelectDropdown({ id, title, values, onChange, searchable = f
       input.style.margin = '8px auto';
       input.style.display = 'block';
       input.style.padding = '6px';
+      input.style.border = '1px solid #ccc';
+      input.style.borderRadius = '6px';
+      input.style.background = 'white';
+      input.style.color = 'black';
+
       input.addEventListener('click', e => e.stopPropagation());
+      input.addEventListener('keydown', e => e.stopPropagation());
+
       input.oninput = () => {
         const q = input.value.toLowerCase();
         const filtered = values.filter(v => v.toLowerCase().includes(q));
         renderOptions(filtered);
+        const newInput = menu.querySelector('input.dropdown-search');
+        newInput.value = q; // retain text when re-rendering
       };
       menu.appendChild(input);
       setTimeout(() => input.focus(), 0);
