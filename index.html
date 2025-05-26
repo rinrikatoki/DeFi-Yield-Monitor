@@ -6,40 +6,96 @@
   <title>DeFi Yield Monitor</title>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <style>
+    :root {
+      --bg-color: #f4f4f4;
+      --text-color: #333;
+      --card-bg: #fff;
+      --highlight: green;
+    }
+
+    [data-theme="dark"] {
+      --bg-color: #121212;
+      --text-color: #eee;
+      --card-bg: #1f1f1f;
+      --highlight: #00e676;
+    }
+
     body {
-      font-family: sans-serif;
+      font-family: 'Segoe UI', sans-serif;
       margin: 0;
       padding: 20px;
-      background: #f4f4f4;
-      color: #333;
+      background: var(--bg-color);
+      color: var(--text-color);
     }
+
     h1 {
       text-align: center;
-      font-size: 24px;
+      font-size: 26px;
+      margin-bottom: 20px;
     }
+
+    #controls {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 20px;
+    }
+
+    #search, #sort {
+      padding: 8px 12px;
+      font-size: 14px;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      background: var(--card-bg);
+      color: var(--text-color);
+    }
+
+    #refresh {
+      padding: 8px 16px;
+      background: var(--highlight);
+      border: none;
+      border-radius: 8px;
+      color: white;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
     #yield-list {
       max-width: 900px;
       margin: 0 auto;
     }
+
     .pool {
-      background: white;
-      border-radius: 10px;
-      padding: 15px;
-      margin-bottom: 12px;
-      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+      background: var(--card-bg);
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 14px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      transition: transform 0.2s ease;
     }
+
+    .pool:hover {
+      transform: translateY(-3px);
+    }
+
     .pool h3 {
-      margin: 0 0 10px;
-    }
-    .pool .meta {
-      font-size: 14px;
-      color: #666;
-    }
-    .pool .yield {
+      margin: 0 0 8px;
       font-size: 18px;
-      font-weight: bold;
-      color: green;
     }
+
+    .meta {
+      font-size: 13px;
+      color: #888;
+    }
+
+    .yield {
+      font-size: 16px;
+      font-weight: bold;
+      margin-top: 8px;
+      color: var(--highlight);
+    }
+
     #loader {
       text-align: center;
       margin-top: 40px;
@@ -49,28 +105,66 @@
 </head>
 <body>
   <h1>Top DeFi Yields</h1>
+
+  <div id="controls">
+    <input type="text" id="search" placeholder="Search by name/token..." />
+    <select id="sort">
+      <option value="apy">Sort by APY</option>
+      <option value="name">Sort by Name</option>
+    </select>
+    <button id="refresh">Refresh</button>
+  </div>
+
   <div id="loader">Loading yields...</div>
   <div id="yield-list"></div>
 
   <script>
-    async function fetchYields() {
-      const res = await fetch("https://yields.llama.fi/pools");
-      const data = await res.json();
-      return data.data;
+    let originalPools = [];
+
+    const loader = document.getElementById("loader");
+    const container = document.getElementById("yield-list");
+    const searchInput = document.getElementById("search");
+    const sortSelect = document.getElementById("sort");
+
+    // Theme handling
+    if (window.Telegram.WebApp) {
+      const theme = Telegram.WebApp.colorScheme === "dark" ? "dark" : "light";
+      document.body.setAttribute("data-theme", theme);
     }
 
-    function renderYields(pools) {
-      const container = document.getElementById("yield-list");
-      const loader = document.getElementById("loader");
+    async function fetchYields() {
+      loader.style.display = "block";
+      container.innerHTML = "";
+      const res = await fetch("https://yields.llama.fi/pools");
+      const data = await res.json();
+      originalPools = data.data.filter(p => p.apy && p.apy > 0);
+      renderYields();
       loader.style.display = "none";
+    }
 
-      // Sort by highest APY first
-      pools.sort((a, b) => b.apy - a.apy);
+    function renderYields() {
+      container.innerHTML = "";
 
-      // Filter and show top 20 pools with valid APY
+      let pools = [...originalPools];
+
+      // Search
+      const search = searchInput.value.toLowerCase();
+      if (search) {
+        pools = pools.filter(pool =>
+          pool.project.toLowerCase().includes(search) ||
+          pool.symbol?.toLowerCase().includes(search)
+        );
+      }
+
+      // Sort
+      if (sortSelect.value === "apy") {
+        pools.sort((a, b) => b.apy - a.apy);
+      } else if (sortSelect.value === "name") {
+        pools.sort((a, b) => a.project.localeCompare(b.project));
+      }
+
+      // Limit to top 20
       pools.slice(0, 20).forEach(pool => {
-        if (!pool.apy || pool.apy <= 0) return;
-
         const el = document.createElement("div");
         el.className = "pool";
         el.innerHTML = `
@@ -82,12 +176,19 @@
         `;
         container.appendChild(el);
       });
+
+      if (pools.length === 0) {
+        container.innerHTML = "<p style='text-align:center;'>No results found.</p>";
+      }
     }
 
-    (async () => {
-      const pools = await fetchYields();
-      renderYields(pools);
-    })();
+    // Event listeners
+    document.getElementById("refresh").addEventListener("click", fetchYields);
+    searchInput.addEventListener("input", renderYields);
+    sortSelect.addEventListener("change", renderYields);
+
+    // Init
+    fetchYields();
   </script>
 </body>
 </html>
