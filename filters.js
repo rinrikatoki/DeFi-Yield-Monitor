@@ -11,6 +11,9 @@ function createMultiSelectDropdown({ id, title, values, onChange, searchable = f
   let displayed = [...values];
   let currentQuery = '';
 
+  // برای ردیابی وضعیت کیبورد موبایل
+  let isMobileKeyboardOpen = false;
+
   const updateSelection = () => {
     countSpan.textContent = selected.size;
     onChange([...selected]);
@@ -31,6 +34,7 @@ function createMultiSelectDropdown({ id, title, values, onChange, searchable = f
       const input = document.createElement('input');
       input.className = 'dropdown-search';
       input.placeholder = 'Search...';
+      input.value = currentQuery;
       input.style.width = 'calc(100% - 32px)';
       input.style.margin = '12px 16px';
       input.style.padding = '12px 16px';
@@ -38,51 +42,62 @@ function createMultiSelectDropdown({ id, title, values, onChange, searchable = f
       input.style.borderRadius = 'var(--radius)';
       input.style.background = 'var(--card)';
       input.style.color = 'var(--text)';
-      input.style.fontSize = '16px';
+      input.style.fontSize = window.innerWidth <= 768 ? '14px' : '16px';
       input.setAttribute('inputmode', 'text');
       input.setAttribute('autocomplete', 'off');
       input.setAttribute('autocorrect', 'off');
       input.setAttribute('autocapitalize', 'none');
 
-      // Prevent propagation for mobile devices
-      input.addEventListener('click', e => {
+      // مدیریت رویدادهای موبایل
+      input.addEventListener('focus', () => {
+        if (window.innerWidth <= 768) {
+          isMobileKeyboardOpen = true;
+          container.classList.add('open');
+          menu.style.top = '20%'; // پایین‌تر می‌آید تا کیبورد را بپوشاند
+        }
+      });
+
+      input.addEventListener('blur', () => {
+        if (window.innerWidth <= 768) {
+          isMobileKeyboardOpen = false;
+          setTimeout(() => {
+            if (!isMobileKeyboardOpen) {
+              container.classList.remove('open');
+              menu.style.top = '50%';
+            }
+          }, 300);
+        }
+      });
+
+      input.addEventListener('touchstart', (e) => {
+        if (window.innerWidth <= 768) {
+          e.stopPropagation();
+          input.focus();
+        }
+      });
+
+      input.oninput = (e) => {
         e.stopPropagation();
-        if (window.innerWidth <= 768) {
-          e.preventDefault();
-          container.classList.add('open');
-        }
-      });
-
-      input.addEventListener('focus', e => {
-        if (window.innerWidth <= 768) {
-          container.classList.add('open');
-        }
-      });
-
-      input.addEventListener('keydown', e => e.stopPropagation());
-      input.addEventListener('touchstart', e => e.stopPropagation());
-
-      input.oninput = () => {
         currentQuery = input.value.toLowerCase();
         const filtered = sortSearchResults(
           values.filter(v => v.toLowerCase().includes(currentQuery)),
           currentQuery
         );
         renderOptions(filtered);
-        const newInput = menu.querySelector('input.dropdown-search');
-        if (newInput) {
-          newInput.value = currentQuery;
-          if (window.innerWidth > 768) {
-            newInput.focus({ preventScroll: true });
-          }
-        }
       };
 
       menu.appendChild(input);
-      
-      // Only auto-focus on desktop to prevent mobile keyboard issues
+
+      // فوکوس خودکار فقط در دسکتاپ
       if (window.innerWidth > 768) {
         setTimeout(() => input.focus({ preventScroll: true }), 0);
+      } else {
+        // در موبایل بعد از رندر، فوکوس می‌کنیم اگر نیاز باشد
+        setTimeout(() => {
+          if (container.classList.contains('open')) {
+            input.focus();
+          }
+        }, 100);
       }
     }
 
@@ -164,30 +179,41 @@ function createMultiSelectDropdown({ id, title, values, onChange, searchable = f
   renderOptions(displayed);
 
   toggle.onclick = (e) => {
-    // On mobile, only toggle if dropdown is closed
-    if (window.innerWidth > 768 || !container.classList.contains('open')) {
-      e.stopPropagation();
-      document.querySelectorAll('.dropdown').forEach(d => d.classList.remove('open'));
-      container.classList.toggle('open');
+    e.stopPropagation();
+    
+    if (window.innerWidth <= 768 && isMobileKeyboardOpen) {
+      return;
+    }
+
+    const isOpen = container.classList.contains('open');
+    document.querySelectorAll('.dropdown').forEach(d => d.classList.remove('open'));
+    
+    if (!isOpen) {
+      container.classList.add('open');
+      if (searchable && window.innerWidth <= 768) {
+        setTimeout(() => {
+          const input = menu.querySelector('input.dropdown-search');
+          if (input) input.focus();
+        }, 100);
+      }
     }
   };
 
-  // Close dropdown when clicking outside
+  // بستن dropdown وقتی کلیک خارج شود
   document.addEventListener('click', (e) => {
-    if (!container.contains(e.target)) {
+    if (!container.contains(e.target) && !isMobileKeyboardOpen) {
       container.classList.remove('open');
     }
   });
 
-  // Handle mobile virtual keyboard close
+  // مدیریت تغییر اندازه صفحه
   window.addEventListener('resize', () => {
-    if (window.innerWidth > 768) return;
-    const input = container.querySelector('input.dropdown-search');
-    if (input && document.activeElement === input) {
-      input.blur();
+    if (window.innerWidth > 768 && isMobileKeyboardOpen) {
+      isMobileKeyboardOpen = false;
     }
   });
 
+  renderOptions(displayed);
   updateSelection();
 }
 
@@ -350,4 +376,24 @@ document.addEventListener('DOMContentLoaded', () => {
   applyTheme();
   applyLanguage("en");
   fetchAndInit();
+
+  document.addEventListener('touchstart', function(e) {
+    if (window.innerWidth > 768) return;
+    
+    // بستن dropdownها وقتی روی جای دیگری از صفحه کلیک می‌شود
+    const dropdowns = document.querySelectorAll('.dropdown');
+    let isDropdownClicked = false;
+    
+    dropdowns.forEach(dropdown => {
+      if (dropdown.contains(e.target)) {
+        isDropdownClicked = true;
+      }
+    });
+    
+    if (!isDropdownClicked) {
+      dropdowns.forEach(dropdown => {
+        dropdown.classList.remove('open');
+      });
+    }
+  }, { passive: true });
 });

@@ -311,6 +311,79 @@
       max-height: 70vh;
     }
   }
+
+  .dropdown {
+    position: relative;
+    min-width: 180px;
+    max-width: 100%;
+  }
+
+  .dropdown-menu {
+    position: absolute;
+    z-index: 1000;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    max-height: 60vh;
+    overflow-y: auto;
+    width: 100%;
+    min-width: 250px;
+    display: none;
+    margin-top: 8px;
+    box-shadow: var(--shadow);
+    left: 0;
+    right: auto;
+  }
+
+  /* بهبود ظاهر موبایل */
+  @media (max-width: 768px) {
+    body {
+      padding: 12px;
+    }
+
+    #controls {
+      gap: 8px;
+    }
+
+    #search, .dropdown, select, button {
+      font-size: 14px;
+      padding: 10px 12px;
+    }
+
+    .dropdown-menu {
+      position: fixed;
+      width: calc(100% - 24px);
+      left: 12px !important;
+      right: 12px !important;
+      top: 50% !important;
+      transform: translateY(-50%);
+      max-height: 60vh;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+    }
+
+    .dropdown-search {
+      padding: 10px 12px;
+      font-size: 14px;
+    }
+
+    #yield-list {
+      grid-template-columns: 1fr;
+      gap: 12px;
+    }
+
+    .pool {
+      padding: 16px;
+    }
+  }
+
+  /* بهبود ظاهر دسکتاپ */
+  @media (min-width: 769px) {
+    .dropdown-menu {
+      width: auto;
+      min-width: 300px;
+      max-width: 400px;
+    }
+  }
 </style>
   </style>
 </head>
