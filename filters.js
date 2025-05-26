@@ -7,25 +7,21 @@ function createMultiSelectDropdown({ id, title, values, onChange, searchable = f
   const toggle = container.querySelector('.dropdown-toggle');
   const countSpan = toggle.querySelector('.count');
   const menu = container.querySelector('.dropdown-menu');
-  let selected = new Set(values);
+  let selected = new Set();
   let currentQuery = '';
   let isMobileKeyboardOpen = false;
 
-  // Update selection counter and callback
+  // Update selection display and callback
   const updateSelection = () => {
     countSpan.textContent = selected.size;
     onChange([...selected]);
   };
 
-  // Filter and sort results
+  // Filter and sort functionality
   const filterResults = (query) => {
     return values
       .filter(v => v.toLowerCase().includes(query.toLowerCase()))
-      .sort((a, b) => {
-        const aIndex = a.toLowerCase().indexOf(query);
-        const bIndex = b.toLowerCase().indexOf(query);
-        return aIndex - bIndex || a.localeCompare(b);
-      });
+      .sort((a, b) => a.localeCompare(b));
   };
 
   // Render dropdown content
@@ -49,23 +45,6 @@ function createMultiSelectDropdown({ id, title, values, onChange, searchable = f
         fontSize: window.innerWidth <= 768 ? '14px' : '16px'
       });
 
-      // Input event handlers
-      input.addEventListener('focus', () => {
-        if (window.innerWidth <= 768) {
-          isMobileKeyboardOpen = true;
-          menu.style.top = '25%';
-        }
-      });
-
-      input.addEventListener('blur', () => {
-        if (window.innerWidth <= 768) {
-          setTimeout(() => {
-            isMobileKeyboardOpen = false;
-            menu.style.top = '50%';
-          }, 200);
-        }
-      });
-
       input.addEventListener('input', (e) => {
         currentQuery = e.target.value;
         renderOptions(filterResults(currentQuery));
@@ -76,81 +55,123 @@ function createMultiSelectDropdown({ id, title, values, onChange, searchable = f
 
     // Control buttons
     const controlBar = document.createElement('div');
-    controlBar.innerHTML = `
-      <button type="button" class="select-all">Select All</button>
-      <button type="button" class="deselect-all">Deselect All</button>
+    controlBar.style.cssText = `
+      padding: 8px 16px;
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      border-bottom: 1px solid var(--border);
     `;
-    controlBar.querySelector('.select-all').onclick = () => {
+    
+    controlBar.innerHTML = `
+      <button type="button" class="select-all" style="flex:1; padding: 8px; border-radius: var(--radius); background:var(--card); border:1px solid var(--border); color:var(--text)">
+        Select All
+      </button>
+      <button type="button" class="deselect-all" style="flex:1; padding: 8px; border-radius: var(--radius); background:var(--card); border:1px solid var(--border); color:var(--text)">
+        Deselect All
+      </button>
+    `;
+
+    controlBar.querySelector('.select-all').addEventListener('click', () => {
       selected = new Set(values);
       updateSelection();
       renderOptions(filterResults(currentQuery));
-    };
-    controlBar.querySelector('.deselect-all').onclick = () => {
+    });
+
+    controlBar.querySelector('.deselect-all').addEventListener('click', () => {
       selected.clear();
       updateSelection();
       renderOptions(filterResults(currentQuery));
-    };
+    });
+
     menu.appendChild(controlBar);
 
     // Options list
+    const listContainer = document.createElement('div');
     if (filteredValues.length === 0) {
       const noResults = document.createElement('div');
       noResults.textContent = 'No results found';
-      noResults.className = 'no-results';
-      menu.appendChild(noResults);
+      noResults.style.cssText = `
+        padding: 16px;
+        text-align: center;
+        color: var(--text-secondary);
+      `;
+      listContainer.appendChild(noResults);
     } else {
       filteredValues.forEach(value => {
         const label = document.createElement('label');
+        label.style.cssText = `
+          display: flex;
+          align-items: center;
+          padding: 12px 16px;
+          cursor: pointer;
+          border-bottom: 1px solid var(--border);
+          font-size: 16px;
+          user-select: none;
+          transition: background 0.2s;
+        `;
+
         label.innerHTML = `
-          <input type="checkbox" ${selected.has(value) ? 'checked' : ''}>
+          <input 
+            type="checkbox" 
+            style="margin-right: 12px; width: 18px; height: 18px" 
+            ${selected.has(value) ? 'checked' : ''}
+          >
           <span>${value}</span>
         `;
-        label.querySelector('input').onchange = (e) => {
-          e.target.checked ? selected.add(value) : selected.delete(value);
+
+        const checkbox = label.querySelector('input');
+        checkbox.addEventListener('change', () => {
+          checkbox.checked ? selected.add(value) : selected.delete(value);
           updateSelection();
-        };
-        menu.appendChild(label);
+        });
+
+        listContainer.appendChild(label);
       });
     }
 
-    // Mobile focus handling
-    if (searchable && window.innerWidth <= 768) {
-      setTimeout(() => menu.querySelector('input')?.focus(), 50);
-    }
+    menu.appendChild(listContainer);
   };
 
   // Toggle dropdown
   toggle.addEventListener('click', (e) => {
     e.stopPropagation();
-    const wasOpen = container.classList.contains('open');
+    const isOpen = container.classList.contains('open');
     
+    // Close all other dropdowns
     document.querySelectorAll('.dropdown').forEach(d => {
       if (d !== container) d.classList.remove('open');
     });
 
-    if (!wasOpen) {
+    if (!isOpen) {
       container.classList.add('open');
       renderOptions(filterResults(currentQuery));
+      if (searchable) {
+        setTimeout(() => {
+          const input = menu.querySelector('input');
+          if (input) input.focus();
+        }, 50);
+      }
     } else {
       container.classList.remove('open');
     }
   });
 
-  // Close dropdowns on outside click
+  // Close dropdown when clicking outside
   document.addEventListener('click', (e) => {
-    if (!container.contains(e.target) {
+    if (!container.contains(e.target)) {
       container.classList.remove('open');
     }
   });
 
-  // Handle mobile keyboard resize
+  // Handle mobile keyboard
   window.addEventListener('resize', () => {
-    if (window.innerWidth > 768 && isMobileKeyboardOpen) {
+    if (window.innerWidth > 768) {
       isMobileKeyboardOpen = false;
     }
   });
 
-  // Initial render
+  // Initial setup
   renderOptions(values);
   updateSelection();
 }
