@@ -9,10 +9,19 @@ function createMultiSelectDropdown({ id, title, values, onChange, searchable = f
   const menu = container.querySelector('.dropdown-menu');
   let selected = new Set(values);
   let displayed = [...values];
+  let currentQuery = '';
 
   const updateSelection = () => {
     countSpan.textContent = selected.size;
     onChange([...selected]);
+  };
+
+  const sortSearchResults = (list, query) => {
+    return list.sort((a, b) => {
+      const aIndex = a.toLowerCase().indexOf(query);
+      const bIndex = b.toLowerCase().indexOf(query);
+      return (aIndex === bIndex) ? a.localeCompare(b) : aIndex - bIndex;
+    });
   };
 
   const renderOptions = (list) => {
@@ -29,16 +38,17 @@ function createMultiSelectDropdown({ id, title, values, onChange, searchable = f
       input.style.borderRadius = '6px';
       input.style.background = 'white';
       input.style.color = 'black';
-
       input.addEventListener('click', e => e.stopPropagation());
       input.addEventListener('keydown', e => e.stopPropagation());
-
       input.oninput = () => {
-        const q = input.value.toLowerCase();
-        const filtered = values.filter(v => v.toLowerCase().includes(q));
+        currentQuery = input.value.toLowerCase();
+        const filtered = sortSearchResults(
+          values.filter(v => v.toLowerCase().includes(currentQuery)),
+          currentQuery
+        );
         renderOptions(filtered);
         const newInput = menu.querySelector('input.dropdown-search');
-        newInput.value = q; // retain text when re-rendering
+        newInput.value = currentQuery;
       };
       menu.appendChild(input);
       setTimeout(() => input.focus(), 0);
@@ -65,7 +75,24 @@ function createMultiSelectDropdown({ id, title, values, onChange, searchable = f
     };
     menu.appendChild(controlBar);
 
-    list.forEach(v => {
+    const optionBox = document.createElement('div');
+    optionBox.style.maxHeight = '250px';
+    optionBox.style.overflowY = 'auto';
+    menu.appendChild(optionBox);
+
+    if (list.length === 0) {
+      const noResult = document.createElement('div');
+      noResult.textContent = 'No results found';
+      noResult.style.padding = '10px';
+      noResult.style.textAlign = 'center';
+      noResult.style.color = '#999';
+      optionBox.appendChild(noResult);
+      return;
+    }
+
+    const limit = loadMore ? Math.min(list.length, chunkSize) : list.length;
+    for (let i = 0; i < limit; i++) {
+      const v = list[i];
       const label = document.createElement('label');
       label.style.display = 'block';
       label.style.padding = '5px 10px';
@@ -77,18 +104,18 @@ function createMultiSelectDropdown({ id, title, values, onChange, searchable = f
         else selected.delete(v);
         updateSelection();
       };
-      menu.appendChild(label);
-    });
+      optionBox.appendChild(label);
+    }
 
-    if (loadMore && list.length < values.length) {
+    if (loadMore && list.length > chunkSize) {
       const btn = document.createElement('button');
       btn.textContent = 'Load More';
       btn.style.margin = '10px auto';
       btn.style.display = 'block';
       btn.onclick = (e) => {
         e.stopPropagation();
-        displayed = values.slice(0, displayed.length + chunkSize);
-        renderOptions(displayed);
+        chunkSize += 20;
+        renderOptions(list);
       };
       menu.appendChild(btn);
     }
