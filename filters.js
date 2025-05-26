@@ -33,13 +33,21 @@ function createMultiSelectDropdown({ id, title, values, onChange, searchable = f
       input.style.width = '90%';
       input.style.margin = '8px auto';
       input.style.display = 'block';
-      input.style.padding = '6px';
+      input.style.padding = '10px';
       input.style.border = '1px solid #ccc';
-      input.style.borderRadius = '6px';
-      input.style.background = 'white';
-      input.style.color = 'black';
+      input.style.borderRadius = '8px';
+      input.style.background = '#fff';
+      input.style.color = '#000';
+      input.style.fontSize = '14px';
+      input.setAttribute('inputmode', 'text');
+      input.setAttribute('autocomplete', 'off');
+      input.setAttribute('autocorrect', 'off');
+      input.setAttribute('autocapitalize', 'none');
+
       input.addEventListener('click', e => e.stopPropagation());
       input.addEventListener('keydown', e => e.stopPropagation());
+      input.addEventListener('touchstart', e => e.stopPropagation());
+
       input.oninput = () => {
         currentQuery = input.value.toLowerCase();
         const filtered = sortSearchResults(
@@ -50,15 +58,18 @@ function createMultiSelectDropdown({ id, title, values, onChange, searchable = f
         const newInput = menu.querySelector('input.dropdown-search');
         newInput.value = currentQuery;
       };
+
       menu.appendChild(input);
-      setTimeout(() => input.focus(), 0);
+      setTimeout(() => input.focus({ preventScroll: true }), 0);
     }
 
     const controlBar = document.createElement('div');
-    controlBar.style.padding = '5px 10px';
+    controlBar.style.padding = '8px 10px';
+    controlBar.style.display = 'flex';
+    controlBar.style.justifyContent = 'space-between';
     controlBar.innerHTML = `
-      <button type="button" style="margin-right: 5px">Select All</button>
-      <button type="button">Deselect All</button>
+      <button type="button" style="flex:1; margin-right: 5px; padding: 6px 10px; border-radius: 6px; background:#f0f0f0; border:1px solid #ccc">Select All</button>
+      <button type="button" style="flex:1; padding: 6px 10px; border-radius: 6px; background:#f0f0f0; border:1px solid #ccc">Deselect All</button>
     `;
     const [selectAllBtn, deselectAllBtn] = controlBar.querySelectorAll('button');
     selectAllBtn.onclick = (e) => {
@@ -88,9 +99,12 @@ function createMultiSelectDropdown({ id, title, values, onChange, searchable = f
     list.forEach(v => {
       const label = document.createElement('label');
       label.style.display = 'block';
-      label.style.padding = '5px 10px';
+      label.style.padding = '6px 12px';
       label.style.cursor = 'pointer';
-      label.innerHTML = `<input type="checkbox" value="${v}" ${selected.has(v) ? 'checked' : ''}> ${v}`;
+      label.style.borderBottom = '1px solid #eee';
+      label.style.fontSize = '14px';
+      label.style.userSelect = 'none';
+      label.innerHTML = `<input type="checkbox" style="margin-right: 6px;" value="${v}" ${selected.has(v) ? 'checked' : ''}> ${v}`;
       const checkbox = label.querySelector('input');
       checkbox.onchange = () => {
         if (checkbox.checked) selected.add(v);
