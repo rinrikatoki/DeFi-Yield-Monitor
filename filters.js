@@ -7,7 +7,7 @@ function createMultiSelectDropdown({ id, title, values, onChange, searchable = f
   const toggle = container.querySelector('.dropdown-toggle');
   const menu = container.querySelector('.dropdown-menu');
   let selected = new Set(values);
-  let displayed = values.slice(0, chunkSize);
+  let displayed = [...values];
 
   const renderOptions = (list) => {
     menu.innerHTML = '';
@@ -21,6 +21,7 @@ function createMultiSelectDropdown({ id, title, values, onChange, searchable = f
         renderOptions(filtered);
       };
       menu.appendChild(input);
+      input.focus();
     }
     list.forEach(v => {
       const label = document.createElement('label');
@@ -46,7 +47,9 @@ function createMultiSelectDropdown({ id, title, values, onChange, searchable = f
 
   renderOptions(displayed);
 
-  toggle.onclick = () => {
+  toggle.onclick = (e) => {
+    e.stopPropagation();
+    document.querySelectorAll('.dropdown').forEach(d => d.classList.remove('open'));
     container.classList.toggle('open');
   };
 
@@ -63,7 +66,75 @@ document.addEventListener('DOMContentLoaded', () => {
   let protocolSet = [], chainSet = [], tokenSet = [];
   let selectedProtocols = [], selectedChains = [], selectedTokens = [];
 
+  const el = {
+    search: document.getElementById("search"),
+    sort: document.getElementById("sort"),
+    refresh: document.getElementById("refresh"),
+    lang: document.getElementById("lang"),
+    toggleTheme: document.getElementById("toggle-theme"),
+    title: document.getElementById("title"),
+    container: document.getElementById("yield-list"),
+    loader: document.getElementById("loader"),
+    loadMore: document.getElementById("load-more")
+  };
+
+  const translations = {
+    en: {
+      title: "Top DeFi Yields",
+      loading: "Loading...",
+      searchPlaceholder: "Search...",
+      loadMore: "Load More",
+      platform: "Platform",
+      pool: "Pool",
+      apy: "APY",
+      tvl: "TVL",
+      stablecoin: "Stablecoin",
+      rewards: "Rewards",
+      noResults: "No results found."
+    },
+    fa: {
+      title: "بیشترین سودهای دیفای",
+      loading: "در حال بارگذاری...",
+      searchPlaceholder: "جستجو...",
+      loadMore: "بیشتر",
+      platform: "پلتفرم",
+      pool: "استخر",
+      apy: "سود سالانه",
+      tvl: "TVL",
+      stablecoin: "استیبل‌کوین",
+      rewards: "جوایز",
+      noResults: "نتیجه‌ای یافت نشد."
+    }
+  };
+
+  let currentLang = "en";
+  function t(key) {
+    return translations[currentLang][key];
+  }
+  function faDigits(s) {
+    return s.toString().replace(/\d/g, d => "۰۱۲۳۴۵۶۷۸۹"[d]);
+  }
+  function format(val) {
+    return currentLang === "fa" ? faDigits(val) : val;
+  }
+  function applyLanguage(lang) {
+    currentLang = lang;
+    document.documentElement.lang = lang;
+    document.documentElement.dir = lang === "fa" ? "rtl" : "ltr";
+    el.title.textContent = t("title");
+    el.search.placeholder = t("searchPlaceholder");
+    el.loadMore.textContent = t("loadMore");
+    render();
+  }
+
+  function applyTheme(toggle = false) {
+    const isDark = document.body.getAttribute("data-theme") === "dark";
+    const newTheme = toggle ? (isDark ? "light" : "dark") : (Telegram.WebApp.colorScheme || "light");
+    document.body.setAttribute("data-theme", newTheme);
+  }
+
   const fetchAndInit = async () => {
+    el.loader.style.display = "block";
     const res = await fetch('https://yields.llama.fi/pools');
     const data = await res.json();
     pools = data.data.filter(p => p.apy > 0);
@@ -92,21 +163,21 @@ document.addEventListener('DOMContentLoaded', () => {
       loadMore: true,
       onChange: v => { selectedTokens = v; render(); },
     });
+
+    el.loader.style.display = "none";
+    render();
   };
 
   function render() {
-    const search = document.getElementById('search').value.toLowerCase();
-    const sort = document.getElementById('sort').value;
-    const list = document.getElementById('yield-list');
-    const loader = document.getElementById('loader');
-
-    list.innerHTML = '';
-    loader.style.display = 'block';
+    el.container.innerHTML = '';
+    el.loader.style.display = 'block';
+    const search = el.search.value.toLowerCase();
+    const sort = el.sort.value;
 
     let filtered = pools.filter(p =>
-      (selectedProtocols.includes(p.project)) &&
-      (selectedChains.includes(p.chain)) &&
-      (selectedTokens.includes(p.symbol)) &&
+      selectedProtocols.includes(p.project) &&
+      selectedChains.includes(p.chain) &&
+      selectedTokens.includes(p.symbol) &&
       (!search || [p.project, p.symbol, p.chain, p.pool].some(v => v?.toLowerCase().includes(search)))
     );
 
@@ -120,22 +191,30 @@ document.addEventListener('DOMContentLoaded', () => {
       div.className = 'pool';
       div.innerHTML = `
         <h3>${pool.project} — ${pool.symbol}</h3>
-        <div class="meta">Platform: ${pool.chain} | Pool: ${pool.pool}</div>
-        <div class="yield">APY: ${pool.apy.toFixed(2)}%</div>
+        <div class="meta">${t("platform")}: ${pool.chain} | ${t("pool")}: ${pool.pool}</div>
+        <div class="yield">${t("apy")}: ${format(pool.apy.toFixed(2))}%</div>
         <div class="extra">
-          TVL: $${(pool.tvlUsd || 0).toLocaleString()}<br>
-          Stablecoin: ${pool.stablecoin ? '✅' : '❌'}<br>
-          Rewards: ${pool.rewardTokens ? pool.rewardTokens.join(', ') : '-'}
+          ${t("tvl")}: $${format((pool.tvlUsd || 0).toLocaleString())}<br>
+          ${t("stablecoin")}: ${pool.stablecoin ? '✅' : '❌'}<br>
+          ${t("rewards")}: ${pool.rewardTokens ? pool.rewardTokens.join(', ') : '-'}
         </div>
       `;
-      list.appendChild(div);
+      el.container.appendChild(div);
     }
 
-    loader.style.display = 'none';
+    if (filtered.length === 0) {
+      el.container.innerHTML = `<p style="text-align:center;">${t("noResults")}</p>`;
+    }
+    el.loader.style.display = 'none';
   }
 
-  document.getElementById('search').oninput = () => render();
-  document.getElementById('sort').onchange = () => render();
+  el.search.oninput = () => render();
+  el.sort.onchange = () => render();
+  el.refresh.onclick = () => fetchAndInit();
+  el.lang.onchange = () => applyLanguage(el.lang.value);
+  el.toggleTheme.onclick = () => applyTheme(true);
 
+  applyTheme();
+  applyLanguage("en");
   fetchAndInit();
 });
