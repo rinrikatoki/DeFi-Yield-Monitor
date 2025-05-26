@@ -1,5 +1,5 @@
 // Multi-select dropdown logic with search, select all, deselect all
-function createMultiSelectDropdown({ id, title, values, onChange, searchable = false, loadMore = false, chunkSize = 20 }) {
+function createMultiSelectDropdown({ id, title, values, onChange, searchable = false }) {
   const container = document.getElementById(id);
   container.classList.add('dropdown');
   container.innerHTML = `<div class="dropdown-toggle">${title} (<span class="count">${values.length}</span>)</div><div class="dropdown-menu"></div>`;
@@ -75,24 +75,17 @@ function createMultiSelectDropdown({ id, title, values, onChange, searchable = f
     };
     menu.appendChild(controlBar);
 
-    const optionBox = document.createElement('div');
-    optionBox.style.maxHeight = '250px';
-    optionBox.style.overflowY = 'auto';
-    menu.appendChild(optionBox);
-
     if (list.length === 0) {
       const noResult = document.createElement('div');
       noResult.textContent = 'No results found';
       noResult.style.padding = '10px';
       noResult.style.textAlign = 'center';
       noResult.style.color = '#999';
-      optionBox.appendChild(noResult);
+      menu.appendChild(noResult);
       return;
     }
 
-    const limit = loadMore ? Math.min(list.length, chunkSize) : list.length;
-    for (let i = 0; i < limit; i++) {
-      const v = list[i];
+    list.forEach(v => {
       const label = document.createElement('label');
       label.style.display = 'block';
       label.style.padding = '5px 10px';
@@ -104,21 +97,8 @@ function createMultiSelectDropdown({ id, title, values, onChange, searchable = f
         else selected.delete(v);
         updateSelection();
       };
-      optionBox.appendChild(label);
-    }
-
-    if (loadMore && list.length > chunkSize) {
-      const btn = document.createElement('button');
-      btn.textContent = 'Load More';
-      btn.style.margin = '10px auto';
-      btn.style.display = 'block';
-      btn.onclick = (e) => {
-        e.stopPropagation();
-        chunkSize += 20;
-        renderOptions(list);
-      };
-      menu.appendChild(btn);
-    }
+      menu.appendChild(label);
+    });
   };
 
   renderOptions(displayed);
