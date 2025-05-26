@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="fa" dir="rtl">
+<html lang="en" dir="ltr">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -110,38 +110,83 @@
   </style>
 </head>
 <body>
-  <h1 id="title">بیشترین سودهای دیفای</h1>
+  <h1 id="title">Top DeFi Yields</h1>
 
   <div id="controls">
-    <input type="text" id="search" placeholder="جستجو..." />
+    <input type="text" id="search" placeholder="Search..." />
     <select id="protocol-filter"></select>
     <select id="chain-filter"></select>
     <select id="sort">
-      <option value="apy">مرتب‌سازی بر اساس سود</option>
-      <option value="tvl">مرتب‌سازی بر اساس TVL</option>
-      <option value="name">مرتب‌سازی بر اساس نام</option>
+      <option value="apy">Sort by APY</option>
+      <option value="tvl">Sort by TVL</option>
+      <option value="name">Sort by Name</option>
+    </select>
+    <select id="lang">
+      <option value="en">English</option>
+      <option value="fa">فارسی</option>
     </select>
     <button id="refresh">🔄</button>
     <button id="toggle-theme">🌗</button>
   </div>
 
-  <div id="loader">در حال بارگذاری...</div>
+  <div id="loader">Loading...</div>
   <div id="yield-list"></div>
 
   <script>
+    const translations = {
+      en: {
+        title: "Top DeFi Yields",
+        loading: "Loading...",
+        searchPlaceholder: "Search...",
+        sortByAPY: "Sort by APY",
+        sortByTVL: "Sort by TVL",
+        sortByName: "Sort by Name",
+        noResults: "No results found.",
+        platform: "Platform",
+        pool: "Pool",
+        apy: "APY",
+        tvl: "TVL",
+        stablecoin: "Stablecoin",
+        rewards: "Rewards"
+      },
+      fa: {
+        title: "بیشترین سودهای دیفای",
+        loading: "در حال بارگذاری...",
+        searchPlaceholder: "جستجو...",
+        sortByAPY: "مرتب‌سازی بر اساس سود",
+        sortByTVL: "مرتب‌سازی بر اساس TVL",
+        sortByName: "مرتب‌سازی بر اساس نام",
+        noResults: "نتیجه‌ای یافت نشد.",
+        platform: "پلتفرم",
+        pool: "استخر",
+        apy: "سود سالانه",
+        tvl: "میزان TVL",
+        stablecoin: "استیبل‌کوین",
+        rewards: "جوایز"
+      }
+    };
+
     const faDigits = s => s.toString().replace(/\d/g, d => "۰۱۲۳۴۵۶۷۸۹"[d]);
+
+    let pools = [];
+    let currentLang = "en";
+
     const el = {
       loader: document.getElementById("loader"),
       container: document.getElementById("yield-list"),
       search: document.getElementById("search"),
       sort: document.getElementById("sort"),
       refresh: document.getElementById("refresh"),
+      lang: document.getElementById("lang"),
       themeToggle: document.getElementById("toggle-theme"),
       protocolFilter: document.getElementById("protocol-filter"),
       chainFilter: document.getElementById("chain-filter"),
+      title: document.getElementById("title")
     };
 
-    let pools = [];
+    function formatValue(value) {
+      return currentLang === "fa" ? faDigits(value) : value;
+    }
 
     function applyTheme(toggle = false) {
       const isDark = document.body.getAttribute("data-theme") === "dark";
@@ -149,8 +194,18 @@
       document.body.setAttribute("data-theme", newTheme);
     }
 
-    function formatValue(value) {
-      return document.documentElement.lang === "fa" ? faDigits(value) : value;
+    function applyLanguage(lang) {
+      currentLang = lang;
+      const t = translations[lang];
+      document.documentElement.lang = lang;
+      document.documentElement.dir = lang === "fa" ? "rtl" : "ltr";
+      el.title.textContent = t.title;
+      el.loader.textContent = t.loading;
+      el.search.placeholder = t.searchPlaceholder;
+      el.sort.options[0].text = t.sortByAPY;
+      el.sort.options[1].text = t.sortByTVL;
+      el.sort.options[2].text = t.sortByName;
+      renderYields();
     }
 
     async function fetchYields() {
@@ -168,28 +223,21 @@
       const protocols = [...new Set(pools.map(p => p.project))].sort();
       const chains = [...new Set(pools.map(p => p.chain))].sort();
 
-      el.protocolFilter.innerHTML = `<option value="">پروتکل</option>` + protocols.map(p => `<option value="${p}">${p}</option>`).join("");
-      el.chainFilter.innerHTML = `<option value="">چین</option>` + chains.map(c => `<option value="${c}">${c}</option>`).join("");
+      el.protocolFilter.innerHTML = `<option value="">${currentLang === "fa" ? "پروتکل" : "Protocol"}</option>` + protocols.map(p => `<option value="${p}">${p}</option>`).join("");
+      el.chainFilter.innerHTML = `<option value="">${currentLang === "fa" ? "چین" : "Chain"}</option>` + chains.map(c => `<option value="${c}">${c}</option>`).join("");
     }
 
     function renderYields() {
+      const t = translations[currentLang];
       const q = el.search.value.toLowerCase();
       const protocol = el.protocolFilter.value;
       const chain = el.chainFilter.value;
 
-      let results = [...pools];
-
-      if (q) {
-        results = results.filter(p =>
-          p.project?.toLowerCase().includes(q) ||
-          p.symbol?.toLowerCase().includes(q) ||
-          p.chain?.toLowerCase().includes(q) ||
-          p.pool?.toLowerCase().includes(q)
-        );
-      }
-
-      if (protocol) results = results.filter(p => p.project === protocol);
-      if (chain) results = results.filter(p => p.chain === chain);
+      let results = pools.filter(p =>
+        (!q || [p.project, p.symbol, p.chain, p.pool].some(val => val?.toLowerCase().includes(q))) &&
+        (!protocol || p.project === protocol) &&
+        (!chain || p.chain === chain)
+      );
 
       if (el.sort.value === "apy") results.sort((a, b) => b.apy - a.apy);
       else if (el.sort.value === "tvl") results.sort((a, b) => b.tvlUsd - a.tvlUsd);
@@ -197,59 +245,46 @@
 
       el.container.innerHTML = "";
       results.slice(0, 20).forEach(pool => {
-        const div = document.createElement("div");
-        div.className = "pool";
-
-        div.innerHTML = `
+        const card = document.createElement("div");
+        card.className = "pool";
+        card.innerHTML = `
           <h3>${pool.project} — ${pool.symbol}</h3>
-          <div class="meta">پلتفرم: ${pool.chain} | استخر: ${pool.pool}</div>
-          <div class="yield">سود سالانه: ${formatValue(pool.apy.toFixed(2))}%</div>
+          <div class="meta">${t.platform}: ${pool.chain} | ${t.pool}: ${pool.pool}</div>
+          <div class="yield">${t.apy}: ${formatValue(pool.apy.toFixed(2))}%</div>
           <div class="extra">
-            TVL: $${formatValue((pool.tvlUsd || 0).toLocaleString())}<br>
-            استیبل‌کوین: ${pool.stablecoin ? "✅" : "❌"}<br>
-            جوایز: ${pool.rewardTokens ? pool.rewardTokens.join(", ") : "-"}
+            ${t.tvl}: $${formatValue((pool.tvlUsd || 0).toLocaleString())}<br>
+            ${t.stablecoin}: ${pool.stablecoin ? "✅" : "❌"}<br>
+            ${t.rewards}: ${pool.rewardTokens ? pool.rewardTokens.join(", ") : "-"}
           </div>
         `;
-
-        // Add chart
-        const canvas = document.createElement("canvas");
-        canvas.height = 100;
-        div.appendChild(canvas);
-        el.container.appendChild(div);
-
-        if (pool.apyBreakdown) {
-          const history = Object.entries(pool.apyBreakdown)
-            .map(([label, val]) => ({ label, val }))
-            .slice(0, 10);
+        if (pool.apyHistory && pool.apyHistory.length > 1) {
+          const canvas = document.createElement("canvas");
+          canvas.height = 100;
+          card.appendChild(canvas);
 
           new Chart(canvas.getContext("2d"), {
             type: 'line',
             data: {
-              labels: history.map(h => h.label),
+              labels: pool.apyHistory.map(p => new Date(p.timestamp * 1000).toLocaleDateString()),
               datasets: [{
                 label: 'APY',
-                data: history.map(h => h.val),
+                data: pool.apyHistory.map(p => p.apy),
                 borderColor: 'green',
                 backgroundColor: 'rgba(0,255,0,0.1)',
-                tension: 0.3,
+                tension: 0.3
               }]
             },
             options: {
-              scales: {
-                y: {
-                  beginAtZero: true
-                }
-              },
-              plugins: {
-                legend: { display: false }
-              }
+              scales: { y: { beginAtZero: true } },
+              plugins: { legend: { display: false } }
             }
           });
         }
+        el.container.appendChild(card);
       });
 
       if (results.length === 0) {
-        el.container.innerHTML = "<p style='text-align:center;'>نتیجه‌ای یافت نشد.</p>";
+        el.container.innerHTML = `<p style="text-align:center;">${t.noResults}</p>`;
       }
     }
 
@@ -259,10 +294,12 @@
     el.sort.addEventListener("change", renderYields);
     el.protocolFilter.addEventListener("change", renderYields);
     el.chainFilter.addEventListener("change", renderYields);
+    el.lang.addEventListener("change", () => applyLanguage(el.lang.value));
     el.themeToggle.addEventListener("click", () => applyTheme(true));
 
     // Init
     applyTheme();
+    applyLanguage("en");
     fetchYields();
   </script>
 </body>
