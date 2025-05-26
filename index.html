@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" dir="ltr">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -7,16 +7,16 @@
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <style>
     :root {
-      --bg-color: #f4f4f4;
-      --text-color: #333;
-      --card-bg: #fff;
+      --bg: #f4f4f4;
+      --text: #111;
+      --card: #fff;
       --highlight: green;
     }
 
     [data-theme="dark"] {
-      --bg-color: #121212;
-      --text-color: #eee;
-      --card-bg: #1f1f1f;
+      --bg: #121212;
+      --text: #eee;
+      --card: #1e1e1e;
       --highlight: #00e676;
     }
 
@@ -24,8 +24,9 @@
       font-family: 'Segoe UI', sans-serif;
       margin: 0;
       padding: 20px;
-      background: var(--bg-color);
-      color: var(--text-color);
+      background: var(--bg);
+      color: var(--text);
+      transition: background 0.3s, color 0.3s;
     }
 
     h1 {
@@ -36,47 +37,37 @@
 
     #controls {
       display: flex;
-      justify-content: center;
-      gap: 10px;
       flex-wrap: wrap;
+      gap: 10px;
+      justify-content: center;
       margin-bottom: 20px;
     }
 
-    #search, #sort {
+    select, input, button {
       padding: 8px 12px;
-      font-size: 14px;
+      border-radius: 8px;
       border: 1px solid #ccc;
-      border-radius: 8px;
-      background: var(--card-bg);
-      color: var(--text-color);
-    }
-
-    #refresh {
-      padding: 8px 16px;
-      background: var(--highlight);
-      border: none;
-      border-radius: 8px;
-      color: white;
-      font-weight: bold;
-      cursor: pointer;
+      font-size: 14px;
+      background: var(--card);
+      color: var(--text);
     }
 
     #yield-list {
-      max-width: 900px;
-      margin: 0 auto;
+      max-width: 960px;
+      margin: auto;
     }
 
     .pool {
-      background: var(--card-bg);
+      background: var(--card);
       border-radius: 12px;
       padding: 16px;
       margin-bottom: 14px;
       box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-      transition: transform 0.2s ease;
+      transition: transform 0.2s;
     }
 
     .pool:hover {
-      transform: translateY(-3px);
+      transform: scale(1.01);
     }
 
     .pool h3 {
@@ -84,9 +75,9 @@
       font-size: 18px;
     }
 
-    .meta {
+    .meta, .extra {
       font-size: 13px;
-      color: #888;
+      color: #777;
     }
 
     .yield {
@@ -98,96 +89,169 @@
 
     #loader {
       text-align: center;
-      margin-top: 40px;
       font-size: 18px;
+      margin-top: 40px;
+    }
+
+    [dir="rtl"] {
+      direction: rtl;
     }
   </style>
 </head>
 <body>
-  <h1>Top DeFi Yields</h1>
+  <h1 id="title">Top DeFi Yields</h1>
 
   <div id="controls">
-    <input type="text" id="search" placeholder="Search by name/token..." />
+    <input type="text" id="search" placeholder="Search..." />
     <select id="sort">
       <option value="apy">Sort by APY</option>
+      <option value="tvl">Sort by TVL</option>
       <option value="name">Sort by Name</option>
     </select>
-    <button id="refresh">Refresh</button>
+    <select id="lang">
+      <option value="en">English</option>
+      <option value="fa">فارسی</option>
+    </select>
+    <button id="refresh">🔄</button>
+    <button id="toggle-theme">🌗</button>
   </div>
 
-  <div id="loader">Loading yields...</div>
+  <div id="loader">Loading...</div>
   <div id="yield-list"></div>
 
   <script>
-    let originalPools = [];
+    const translations = {
+      en: {
+        title: "Top DeFi Yields",
+        loading: "Loading...",
+        searchPlaceholder: "Search...",
+        sortByAPY: "Sort by APY",
+        sortByTVL: "Sort by TVL",
+        sortByName: "Sort by Name",
+        noResults: "No results found.",
+        platform: "Platform",
+        pool: "Pool",
+        apy: "APY",
+        tvl: "TVL",
+        stablecoin: "Stablecoin",
+        rewards: "Rewards"
+      },
+      fa: {
+        title: "بیشترین سودهای دیفای",
+        loading: "در حال بارگذاری...",
+        searchPlaceholder: "جستجو...",
+        sortByAPY: "مرتب‌سازی بر اساس سود",
+        sortByTVL: "مرتب‌سازی بر اساس سرمایه قفل‌شده",
+        sortByName: "مرتب‌سازی بر اساس نام",
+        noResults: "نتیجه‌ای یافت نشد.",
+        platform: "پلتفرم",
+        pool: "استخر",
+        apy: "سود سالانه",
+        tvl: "میزان TVL",
+        stablecoin: "استیبل‌کوین",
+        rewards: "جوایز"
+      }
+    };
 
-    const loader = document.getElementById("loader");
-    const container = document.getElementById("yield-list");
-    const searchInput = document.getElementById("search");
-    const sortSelect = document.getElementById("sort");
+    let pools = [];
+    let currentLang = "en";
 
-    // Theme handling
-    if (window.Telegram.WebApp) {
-      const theme = Telegram.WebApp.colorScheme === "dark" ? "dark" : "light";
+    const el = {
+      loader: document.getElementById("loader"),
+      container: document.getElementById("yield-list"),
+      search: document.getElementById("search"),
+      sort: document.getElementById("sort"),
+      refresh: document.getElementById("refresh"),
+      lang: document.getElementById("lang"),
+      themeToggle: document.getElementById("toggle-theme"),
+      title: document.getElementById("title")
+    };
+
+    function applyTheme(source = "telegram") {
+      let theme = "light";
+      if (source === "telegram" && Telegram.WebApp) {
+        theme = Telegram.WebApp.colorScheme || "light";
+      } else {
+        theme = document.body.getAttribute("data-theme") === "dark" ? "light" : "dark";
+      }
       document.body.setAttribute("data-theme", theme);
     }
 
+    function applyLanguage(lang) {
+      currentLang = lang;
+      const t = translations[lang];
+      document.documentElement.setAttribute("lang", lang);
+      document.documentElement.setAttribute("dir", lang === "fa" ? "rtl" : "ltr");
+      el.title.textContent = t.title;
+      el.loader.textContent = t.loading;
+      el.search.placeholder = t.searchPlaceholder;
+      el.sort.options[0].text = t.sortByAPY;
+      el.sort.options[1].text = t.sortByTVL;
+      el.sort.options[2].text = t.sortByName;
+      renderYields();
+    }
+
     async function fetchYields() {
-      loader.style.display = "block";
-      container.innerHTML = "";
+      el.loader.style.display = "block";
+      el.container.innerHTML = "";
       const res = await fetch("https://yields.llama.fi/pools");
       const data = await res.json();
-      originalPools = data.data.filter(p => p.apy && p.apy > 0);
+      pools = data.data.filter(p => p.apy > 0);
       renderYields();
-      loader.style.display = "none";
+      el.loader.style.display = "none";
     }
 
     function renderYields() {
-      container.innerHTML = "";
+      const t = translations[currentLang];
+      el.container.innerHTML = "";
 
-      let pools = [...originalPools];
+      const q = el.search.value.toLowerCase();
+      let results = [...pools];
 
-      // Search
-      const search = searchInput.value.toLowerCase();
-      if (search) {
-        pools = pools.filter(pool =>
-          pool.project.toLowerCase().includes(search) ||
-          pool.symbol?.toLowerCase().includes(search)
+      if (q) {
+        results = results.filter(p =>
+          (p.project?.toLowerCase().includes(q)) ||
+          (p.symbol?.toLowerCase().includes(q)) ||
+          (p.chain?.toLowerCase().includes(q)) ||
+          (p.pool?.toLowerCase().includes(q))
         );
       }
 
-      // Sort
-      if (sortSelect.value === "apy") {
-        pools.sort((a, b) => b.apy - a.apy);
-      } else if (sortSelect.value === "name") {
-        pools.sort((a, b) => a.project.localeCompare(b.project));
-      }
+      if (el.sort.value === "apy") results.sort((a, b) => b.apy - a.apy);
+      else if (el.sort.value === "tvl") results.sort((a, b) => b.tvlUsd - a.tvlUsd);
+      else results.sort((a, b) => a.project.localeCompare(b.project));
 
-      // Limit to top 20
-      pools.slice(0, 20).forEach(pool => {
-        const el = document.createElement("div");
-        el.className = "pool";
-        el.innerHTML = `
-          <h3>${pool.project} — ${pool.symbol}</h3>
-          <div class="meta">
-            Platform: ${pool.chain} | Pool: ${pool.pool}
+      results.slice(0, 20).forEach(p => {
+        const card = document.createElement("div");
+        card.className = "pool";
+        card.innerHTML = `
+          <h3>${p.project} — ${p.symbol}</h3>
+          <div class="meta">${t.platform}: ${p.chain} | ${t.pool}: ${p.pool}</div>
+          <div class="yield">${t.apy}: ${p.apy.toFixed(2)}%</div>
+          <div class="extra">
+            ${t.tvl}: $${(p.tvlUsd || 0).toLocaleString()}<br>
+            ${t.stablecoin}: ${p.stablecoin ? "✅" : "❌"}<br>
+            ${t.rewards}: ${p.rewardTokens ? p.rewardTokens.join(", ") : "-"}
           </div>
-          <div class="yield">APY: ${pool.apy.toFixed(2)}%</div>
         `;
-        container.appendChild(el);
+        el.container.appendChild(card);
       });
 
-      if (pools.length === 0) {
-        container.innerHTML = "<p style='text-align:center;'>No results found.</p>";
+      if (results.length === 0) {
+        el.container.innerHTML = `<p style="text-align:center;">${t.noResults}</p>`;
       }
     }
 
-    // Event listeners
-    document.getElementById("refresh").addEventListener("click", fetchYields);
-    searchInput.addEventListener("input", renderYields);
-    sortSelect.addEventListener("change", renderYields);
+    // Listeners
+    el.search.addEventListener("input", renderYields);
+    el.sort.addEventListener("change", renderYields);
+    el.refresh.addEventListener("click", fetchYields);
+    el.lang.addEventListener("change", () => applyLanguage(el.lang.value));
+    el.themeToggle.addEventListener("click", () => applyTheme("manual"));
 
     // Init
+    applyTheme();
+    applyLanguage("en");
     fetchYields();
   </script>
 </body>
