@@ -26,25 +26,39 @@ function createMultiSelectDropdown({ id, title, values, onChange, searchable = f
 
   const renderOptions = (list) => {
     menu.innerHTML = '';
+    
     if (searchable) {
       const input = document.createElement('input');
       input.className = 'dropdown-search';
       input.placeholder = 'Search...';
-      input.style.width = '90%';
-      input.style.margin = '8px auto';
-      input.style.display = 'block';
-      input.style.padding = '10px';
-      input.style.border = '1px solid #ccc';
-      input.style.borderRadius = '8px';
-      input.style.background = '#fff';
-      input.style.color = '#000';
-      input.style.fontSize = '14px';
+      input.style.width = 'calc(100% - 32px)';
+      input.style.margin = '12px 16px';
+      input.style.padding = '12px 16px';
+      input.style.border = '1px solid var(--border)';
+      input.style.borderRadius = 'var(--radius)';
+      input.style.background = 'var(--card)';
+      input.style.color = 'var(--text)';
+      input.style.fontSize = '16px';
       input.setAttribute('inputmode', 'text');
       input.setAttribute('autocomplete', 'off');
       input.setAttribute('autocorrect', 'off');
       input.setAttribute('autocapitalize', 'none');
 
-      input.addEventListener('click', e => e.stopPropagation());
+      // Prevent propagation for mobile devices
+      input.addEventListener('click', e => {
+        e.stopPropagation();
+        if (window.innerWidth <= 768) {
+          e.preventDefault();
+          container.classList.add('open');
+        }
+      });
+
+      input.addEventListener('focus', e => {
+        if (window.innerWidth <= 768) {
+          container.classList.add('open');
+        }
+      });
+
       input.addEventListener('keydown', e => e.stopPropagation());
       input.addEventListener('touchstart', e => e.stopPropagation());
 
@@ -56,61 +70,93 @@ function createMultiSelectDropdown({ id, title, values, onChange, searchable = f
         );
         renderOptions(filtered);
         const newInput = menu.querySelector('input.dropdown-search');
-        newInput.value = currentQuery;
+        if (newInput) {
+          newInput.value = currentQuery;
+          if (window.innerWidth > 768) {
+            newInput.focus({ preventScroll: true });
+          }
+        }
       };
 
       menu.appendChild(input);
-      setTimeout(() => input.focus({ preventScroll: true }), 0);
+      
+      // Only auto-focus on desktop to prevent mobile keyboard issues
+      if (window.innerWidth > 768) {
+        setTimeout(() => input.focus({ preventScroll: true }), 0);
+      }
     }
 
     const controlBar = document.createElement('div');
-    controlBar.style.padding = '8px 10px';
+    controlBar.style.padding = '8px 16px';
     controlBar.style.display = 'flex';
     controlBar.style.justifyContent = 'space-between';
+    controlBar.style.gap = '8px';
+    controlBar.style.borderBottom = '1px solid var(--border)';
     controlBar.innerHTML = `
-      <button type="button" style="flex:1; margin-right: 5px; padding: 6px 10px; border-radius: 6px; background:#f0f0f0; border:1px solid #ccc">Select All</button>
-      <button type="button" style="flex:1; padding: 6px 10px; border-radius: 6px; background:#f0f0f0; border:1px solid #ccc">Deselect All</button>
+      <button type="button" style="flex:1; padding: 8px; border-radius: var(--radius); background:var(--card); border:1px solid var(--border); color:var(--text)">Select All</button>
+      <button type="button" style="flex:1; padding: 8px; border-radius: var(--radius); background:var(--card); border:1px solid var(--border); color:var(--text)">Deselect All</button>
     `;
+    
     const [selectAllBtn, deselectAllBtn] = controlBar.querySelectorAll('button');
+    
     selectAllBtn.onclick = (e) => {
       e.stopPropagation();
       selected = new Set(values);
       updateSelection();
       renderOptions(list);
     };
+    
     deselectAllBtn.onclick = (e) => {
       e.stopPropagation();
       selected = new Set();
       updateSelection();
       renderOptions(list);
     };
+    
     menu.appendChild(controlBar);
 
     if (list.length === 0) {
       const noResult = document.createElement('div');
       noResult.textContent = 'No results found';
-      noResult.style.padding = '10px';
+      noResult.style.padding = '16px';
       noResult.style.textAlign = 'center';
-      noResult.style.color = '#999';
+      noResult.style.color = 'var(--text-secondary)';
       menu.appendChild(noResult);
       return;
     }
 
     list.forEach(v => {
       const label = document.createElement('label');
-      label.style.display = 'block';
-      label.style.padding = '6px 12px';
+      label.style.display = 'flex';
+      label.style.alignItems = 'center';
+      label.style.padding = '12px 16px';
       label.style.cursor = 'pointer';
-      label.style.borderBottom = '1px solid #eee';
-      label.style.fontSize = '14px';
+      label.style.borderBottom = '1px solid var(--border)';
+      label.style.fontSize = '16px';
       label.style.userSelect = 'none';
-      label.innerHTML = `<input type="checkbox" style="margin-right: 6px;" value="${v}" ${selected.has(v) ? 'checked' : ''}> ${v}`;
+      label.style.transition = 'background 0.2s';
+      label.innerHTML = `
+        <input type="checkbox" style="margin-right: 12px; width: 18px; height: 18px;" value="${v}" ${selected.has(v) ? 'checked' : ''}>
+        <span>${v}</span>
+      `;
+      
       const checkbox = label.querySelector('input');
-      checkbox.onchange = () => {
+      checkbox.onchange = (e) => {
+        e.stopPropagation();
         if (checkbox.checked) selected.add(v);
         else selected.delete(v);
         updateSelection();
       };
+      
+      label.onclick = (e) => {
+        if (e.target.tagName !== 'INPUT') {
+          checkbox.checked = !checkbox.checked;
+          if (checkbox.checked) selected.add(v);
+          else selected.delete(v);
+          updateSelection();
+        }
+      };
+      
       menu.appendChild(label);
     });
   };
@@ -118,13 +164,28 @@ function createMultiSelectDropdown({ id, title, values, onChange, searchable = f
   renderOptions(displayed);
 
   toggle.onclick = (e) => {
-    e.stopPropagation();
-    document.querySelectorAll('.dropdown').forEach(d => d.classList.remove('open'));
-    container.classList.toggle('open');
+    // On mobile, only toggle if dropdown is closed
+    if (window.innerWidth > 768 || !container.classList.contains('open')) {
+      e.stopPropagation();
+      document.querySelectorAll('.dropdown').forEach(d => d.classList.remove('open'));
+      container.classList.toggle('open');
+    }
   };
 
-  document.addEventListener('click', e => {
-    if (!container.contains(e.target)) container.classList.remove('open');
+  // Close dropdown when clicking outside
+  document.addEventListener('click', (e) => {
+    if (!container.contains(e.target)) {
+      container.classList.remove('open');
+    }
+  });
+
+  // Handle mobile virtual keyboard close
+  window.addEventListener('resize', () => {
+    if (window.innerWidth > 768) return;
+    const input = container.querySelector('input.dropdown-search');
+    if (input && document.activeElement === input) {
+      input.blur();
+    }
   });
 
   updateSelection();
