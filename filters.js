@@ -7,8 +7,11 @@ function createMultiSelectDropdown({ id, title, values, onChange, searchable = f
   const toggle = container.querySelector('.dropdown-toggle');
   const countSpan = toggle.querySelector('.count');
   const menu = container.querySelector('.dropdown-menu');
-  let selected = new Set(values); // Initialize with all values selected
+  let selected = new Set(values);
+  let displayed = [...values];
   let currentQuery = '';
+
+  // برای ردیابی وضعیت کیبورد موبایل
   let isMobileKeyboardOpen = false;
 
   const updateSelection = () => {
@@ -16,153 +19,201 @@ function createMultiSelectDropdown({ id, title, values, onChange, searchable = f
     onChange([...selected]);
   };
 
-  const filterResults = (query) => {
-    return values
-      .filter(v => v.toLowerCase().includes(query.toLowerCase()))
-      .sort((a, b) => a.localeCompare(b));
+  const sortSearchResults = (list, query) => {
+    return list.sort((a, b) => {
+      const aIndex = a.toLowerCase().indexOf(query);
+      const bIndex = b.toLowerCase().indexOf(query);
+      return (aIndex === bIndex) ? a.localeCompare(b) : aIndex - bIndex;
+    });
   };
 
-  const renderOptions = (filteredValues) => {
+  const renderOptions = (list) => {
     menu.innerHTML = '';
-
+    
     if (searchable) {
       const input = document.createElement('input');
       input.className = 'dropdown-search';
       input.placeholder = 'Search...';
       input.value = currentQuery;
-      Object.assign(input.style, {
-        width: 'calc(100% - 32px)',
-        margin: '12px 16px',
-        padding: '12px 16px',
-        border: '1px solid var(--border)',
-        borderRadius: 'var(--radius)',
-        background: 'var(--card)',
-        color: 'var(--text)',
-        fontSize: window.innerWidth <= 768 ? '14px' : '16px'
+      input.style.width = 'calc(100% - 32px)';
+      input.style.margin = '12px 16px';
+      input.style.padding = '12px 16px';
+      input.style.border = '1px solid var(--border)';
+      input.style.borderRadius = 'var(--radius)';
+      input.style.background = 'var(--card)';
+      input.style.color = 'var(--text)';
+      input.style.fontSize = window.innerWidth <= 768 ? '14px' : '16px';
+      input.setAttribute('inputmode', 'text');
+      input.setAttribute('autocomplete', 'off');
+      input.setAttribute('autocorrect', 'off');
+      input.setAttribute('autocapitalize', 'none');
+
+      // مدیریت رویدادهای موبایل
+      input.addEventListener('focus', () => {
+        if (window.innerWidth <= 768) {
+          isMobileKeyboardOpen = true;
+          container.classList.add('open');
+          menu.style.top = '20%'; // پایین‌تر می‌آید تا کیبورد را بپوشاند
+        }
       });
 
-      input.addEventListener('input', (e) => {
-        currentQuery = e.target.value;
-        renderOptions(filterResults(currentQuery));
+      input.addEventListener('blur', () => {
+        if (window.innerWidth <= 768) {
+          isMobileKeyboardOpen = false;
+          setTimeout(() => {
+            if (!isMobileKeyboardOpen) {
+              container.classList.remove('open');
+              menu.style.top = '50%';
+            }
+          }, 300);
+        }
       });
+
+      input.addEventListener('touchstart', (e) => {
+        if (window.innerWidth <= 768) {
+          e.stopPropagation();
+          input.focus();
+        }
+      });
+
+      input.oninput = (e) => {
+        e.stopPropagation();
+        currentQuery = input.value.toLowerCase();
+        const filtered = sortSearchResults(
+          values.filter(v => v.toLowerCase().includes(currentQuery)),
+          currentQuery
+        );
+        renderOptions(filtered);
+      };
 
       menu.appendChild(input);
+
+      // فوکوس خودکار فقط در دسکتاپ
+      if (window.innerWidth > 768) {
+        setTimeout(() => input.focus({ preventScroll: true }), 0);
+      } else {
+        // در موبایل بعد از رندر، فوکوس می‌کنیم اگر نیاز باشد
+        setTimeout(() => {
+          if (container.classList.contains('open')) {
+            input.focus();
+          }
+        }, 100);
+      }
     }
 
     const controlBar = document.createElement('div');
-    controlBar.style.cssText = `
-      padding: 8px 16px;
-      display: flex;
-      justify-content: space-between;
-      gap: 8px;
-      border-bottom: 1px solid var(--border);
+    controlBar.style.padding = '8px 16px';
+    controlBar.style.display = 'flex';
+    controlBar.style.justifyContent = 'space-between';
+    controlBar.style.gap = '8px';
+    controlBar.style.borderBottom = '1px solid var(--border)';
+    controlBar.innerHTML = `
+      <button type="button" style="flex:1; padding: 8px; border-radius: var(--radius); background:var(--card); border:1px solid var(--border); color:var(--text)">Select All</button>
+      <button type="button" style="flex:1; padding: 8px; border-radius: var(--radius); background:var(--card); border:1px solid var(--border); color:var(--text)">Deselect All</button>
     `;
     
-    controlBar.innerHTML = `
-      <button type="button" class="select-all" style="flex:1; padding: 8px; border-radius: var(--radius); background:var(--card); border:1px solid var(--border); color:var(--text)">
-        Select All
-      </button>
-      <button type="button" class="deselect-all" style="flex:1; padding: 8px; border-radius: var(--radius); background:var(--card); border:1px solid var(--border); color:var(--text)">
-        Deselect All
-      </button>
-    `;
-
-    controlBar.querySelector('.select-all').addEventListener('click', () => {
+    const [selectAllBtn, deselectAllBtn] = controlBar.querySelectorAll('button');
+    
+    selectAllBtn.onclick = (e) => {
+      e.stopPropagation();
       selected = new Set(values);
       updateSelection();
-      renderOptions(filterResults(currentQuery));
-    });
-
-    controlBar.querySelector('.deselect-all').addEventListener('click', () => {
-      selected.clear();
+      renderOptions(list);
+    };
+    
+    deselectAllBtn.onclick = (e) => {
+      e.stopPropagation();
+      selected = new Set();
       updateSelection();
-      renderOptions(filterResults(currentQuery));
-    });
-
+      renderOptions(list);
+    };
+    
     menu.appendChild(controlBar);
 
-    const listContainer = document.createElement('div');
-    if (filteredValues.length === 0) {
-      const noResults = document.createElement('div');
-      noResults.textContent = 'No results found';
-      noResults.style.cssText = `
-        padding: 16px;
-        text-align: center;
-        color: var(--text-secondary);
-      `;
-      listContainer.appendChild(noResults);
-    } else {
-      filteredValues.forEach(value => {
-        const label = document.createElement('label');
-        label.style.cssText = `
-          display: flex;
-          align-items: center;
-          padding: 12px 16px;
-          cursor: pointer;
-          border-bottom: 1px solid var(--border);
-          font-size: 16px;
-          user-select: none;
-          transition: background 0.2s;
-        `;
-
-        label.innerHTML = `
-          <input 
-            type="checkbox" 
-            style="margin-right: 12px; width: 18px; height: 18px" 
-            ${selected.has(value) ? 'checked' : ''}
-          >
-          <span>${value}</span>
-        `;
-
-        const checkbox = label.querySelector('input');
-        checkbox.addEventListener('change', () => {
-          checkbox.checked ? selected.add(value) : selected.delete(value);
-          updateSelection();
-        });
-
-        listContainer.appendChild(label);
-      });
+    if (list.length === 0) {
+      const noResult = document.createElement('div');
+      noResult.textContent = 'No results found';
+      noResult.style.padding = '16px';
+      noResult.style.textAlign = 'center';
+      noResult.style.color = 'var(--text-secondary)';
+      menu.appendChild(noResult);
+      return;
     }
 
-    menu.appendChild(listContainer);
+    list.forEach(v => {
+      const label = document.createElement('label');
+      label.style.display = 'flex';
+      label.style.alignItems = 'center';
+      label.style.padding = '12px 16px';
+      label.style.cursor = 'pointer';
+      label.style.borderBottom = '1px solid var(--border)';
+      label.style.fontSize = '16px';
+      label.style.userSelect = 'none';
+      label.style.transition = 'background 0.2s';
+      label.innerHTML = `
+        <input type="checkbox" style="margin-right: 12px; width: 18px; height: 18px;" value="${v}" ${selected.has(v) ? 'checked' : ''}>
+        <span>${v}</span>
+      `;
+      
+      const checkbox = label.querySelector('input');
+      checkbox.onchange = (e) => {
+        e.stopPropagation();
+        if (checkbox.checked) selected.add(v);
+        else selected.delete(v);
+        updateSelection();
+      };
+      
+      label.onclick = (e) => {
+        if (e.target.tagName !== 'INPUT') {
+          checkbox.checked = !checkbox.checked;
+          if (checkbox.checked) selected.add(v);
+          else selected.delete(v);
+          updateSelection();
+        }
+      };
+      
+      menu.appendChild(label);
+    });
   };
 
-  toggle.addEventListener('click', (e) => {
-    e.stopPropagation();
-    const isOpen = container.classList.contains('open');
-    
-    document.querySelectorAll('.dropdown').forEach(d => {
-      if (d !== container) d.classList.remove('open');
-    });
+  renderOptions(displayed);
 
+  toggle.onclick = (e) => {
+    e.stopPropagation();
+    
+    if (window.innerWidth <= 768 && isMobileKeyboardOpen) {
+      return;
+    }
+
+    const isOpen = container.classList.contains('open');
+    document.querySelectorAll('.dropdown').forEach(d => d.classList.remove('open'));
+    
     if (!isOpen) {
       container.classList.add('open');
-      renderOptions(filterResults(currentQuery));
-      if (searchable) {
+      if (searchable && window.innerWidth <= 768) {
         setTimeout(() => {
-          const input = menu.querySelector('input');
+          const input = menu.querySelector('input.dropdown-search');
           if (input) input.focus();
-        }, 50);
+        }, 100);
       }
-    } else {
-      container.classList.remove('open');
     }
-  });
+  };
 
+  // بستن dropdown وقتی کلیک خارج شود
   document.addEventListener('click', (e) => {
-    if (!container.contains(e.target)) {
+    if (!container.contains(e.target) && !isMobileKeyboardOpen) {
       container.classList.remove('open');
     }
   });
 
+  // مدیریت تغییر اندازه صفحه
   window.addEventListener('resize', () => {
-    if (window.innerWidth > 768) {
+    if (window.innerWidth > 768 && isMobileKeyboardOpen) {
       isMobileKeyboardOpen = false;
     }
   });
 
-  // Initial render with all values
-  renderOptions(values);
+  renderOptions(displayed);
   updateSelection();
 }
 
@@ -241,66 +292,60 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const fetchAndInit = async () => {
     el.loader.style.display = "block";
-    try {
-      const res = await fetch('https://yields.llama.fi/pools');
-      const data = await res.json();
-      pools = data.data.filter(p => p.apy > 0);
+    const res = await fetch('https://yields.llama.fi/pools');
+    const data = await res.json();
+    pools = data.data.filter(p => p.apy > 0);
 
-      protocolSet = [...new Set(pools.map(p => p.project))].sort();
-      chainSet = [...new Set(pools.map(p => p.chain))].sort();
-      tokenSet = [...new Set(pools.map(p => p.symbol))].sort();
+    protocolSet = [...new Set(pools.map(p => p.project))].sort();
+    chainSet = [...new Set(pools.map(p => p.chain))].sort();
+    tokenSet = [...new Set(pools.map(p => p.symbol))].sort();
 
-      createMultiSelectDropdown({
-        id: 'protocol-dropdown',
-        title: 'Protocols',
-        values: protocolSet,
-        searchable: true,
-        onChange: v => { selectedProtocols = v; render(); },
-      });
-      createMultiSelectDropdown({
-        id: 'chain-dropdown',
-        title: 'Chains',
-        values: chainSet,
-        searchable: true,
-        onChange: v => { selectedChains = v; render(); },
-      });
-      createMultiSelectDropdown({
-        id: 'token-dropdown',
-        title: 'Tokens',
-        values: tokenSet,
-        searchable: true,
-        onChange: v => { selectedTokens = v; render(); },
-      });
+    createMultiSelectDropdown({
+      id: 'protocol-dropdown',
+      title: 'Protocols',
+      values: protocolSet,
+      searchable: true,
+      onChange: v => { selectedProtocols = v; render(); },
+    });
+    createMultiSelectDropdown({
+      id: 'chain-dropdown',
+      title: 'Chains',
+      values: chainSet,
+      searchable: true,
+      onChange: v => { selectedChains = v; render(); },
+    });
+    createMultiSelectDropdown({
+      id: 'token-dropdown',
+      title: 'Tokens',
+      values: tokenSet,
+      searchable: true,
+      loadMore: true,
+      onChange: v => { selectedTokens = v; render(); },
+    });
 
-      render();
-    } catch (error) {
-      console.error('Failed to fetch pools:', error);
-    } finally {
-      el.loader.style.display = "none";
-    }
+    el.loader.style.display = "none";
+    render();
   };
 
   function render() {
     el.container.innerHTML = '';
+    el.loader.style.display = 'block';
     const search = el.search.value.toLowerCase();
     const sort = el.sort.value;
 
-    let filtered = pools.filter(p => {
-      const protocolMatch = selectedProtocols.length ? selectedProtocols.includes(p.project) : true;
-      const chainMatch = selectedChains.length ? selectedChains.includes(p.chain) : true;
-      const tokenMatch = selectedTokens.length ? selectedTokens.includes(p.symbol) : true;
-      const searchMatch = !search || [p.project, p.symbol, p.chain, p.pool]
-        .some(v => v?.toLowerCase().includes(search));
-      
-      return protocolMatch && chainMatch && tokenMatch && searchMatch;
-    });
+    let filtered = pools.filter(p =>
+      selectedProtocols.includes(p.project) &&
+      selectedChains.includes(p.chain) &&
+      selectedTokens.includes(p.symbol) &&
+      (!search || [p.project, p.symbol, p.chain, p.pool].some(v => v?.toLowerCase().includes(search)))
+    );
 
     if (sort === 'apy') filtered.sort((a, b) => b.apy - a.apy);
     else if (sort === 'tvl') filtered.sort((a, b) => b.tvlUsd - a.tvlUsd);
     else filtered.sort((a, b) => a.project.localeCompare(b.project));
 
     const chunk = filtered.slice(0, 20);
-    chunk.forEach(pool => {
+    for (const pool of chunk) {
       const div = document.createElement('div');
       div.className = 'pool';
       div.innerHTML = `
@@ -314,11 +359,12 @@ document.addEventListener('DOMContentLoaded', () => {
         </div>
       `;
       el.container.appendChild(div);
-    });
+    }
 
     if (filtered.length === 0) {
       el.container.innerHTML = `<p style="text-align:center;">${t("noResults")}</p>`;
     }
+    el.loader.style.display = 'none';
   }
 
   el.search.oninput = () => render();
@@ -327,15 +373,14 @@ document.addEventListener('DOMContentLoaded', () => {
   el.lang.onchange = () => applyLanguage(el.lang.value);
   el.toggleTheme.onclick = () => applyTheme(true);
 
-  // Initial setup
   applyTheme();
   applyLanguage("en");
   fetchAndInit();
 
-  // Mobile touch handling
   document.addEventListener('touchstart', function(e) {
     if (window.innerWidth > 768) return;
     
+    // بستن dropdownها وقتی روی جای دیگری از صفحه کلیک می‌شود
     const dropdowns = document.querySelectorAll('.dropdown');
     let isDropdownClicked = false;
     
