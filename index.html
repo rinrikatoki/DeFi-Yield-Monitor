@@ -8,141 +8,310 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=Vazirmatn&family=Inter&display=swap" rel="stylesheet" />
   <style>
-    :root {
-      --bg: #f4f4f4;
-      --text: #111;
-      --card: #fff;
-      --highlight: green;
-      --font: 'Inter', sans-serif;
-    }
-    [data-theme="dark"] {
-      --bg: #121212;
-      --text: #eee;
-      --card: #1e1e1e;
-      --highlight: #00e676;
-    }
-    [lang="fa"] {
-      --font: 'Vazirmatn', sans-serif;
-    }
-    body {
-      font-family: var(--font);
-      margin: 0;
-      padding: 20px;
-      background: var(--bg);
-      color: var(--text);
-      transition: background 0.3s, color 0.3s;
-    }
-    h1 {
-      text-align: center;
-      font-size: 24px;
-    }
+  :root {
+    --bg: #f7fafc;
+    --text: #1a202c;
+    --card: #ffffff;
+    --highlight: #4fd1c5;
+    --highlight-dark: #38b2ac;
+    --font: 'Inter', sans-serif;
+    --border: #e2e8f0;
+    --text-secondary: #718096;
+    --radius: 12px;
+    --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  }
+  
+  [data-theme="dark"] {
+    --bg: #1a202c;
+    --text: #f7fafc;
+    --card: #2d3748;
+    --highlight: #81e6d9;
+    --highlight-dark: #4fd1c5;
+    --border: #4a5568;
+    --text-secondary: #a0aec0;
+    --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.25), 0 2px 4px -1px rgba(0, 0, 0, 0.2);
+  }
+  
+  [lang="fa"] {
+    --font: 'Vazirmatn', sans-serif;
+  }
+  
+  * {
+    box-sizing: border-box;
+  }
+  
+  body {
+    font-family: var(--font);
+    margin: 0;
+    padding: 20px;
+    background: var(--bg);
+    color: var(--text);
+    transition: background 0.3s, color 0.3s;
+    line-height: 1.5;
+    min-height: 100vh;
+  }
+  
+  h1 {
+    text-align: center;
+    font-size: 28px;
+    margin-bottom: 24px;
+    font-weight: 700;
+    color: var(--text);
+  }
+  
+  #controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    justify-content: center;
+    margin: 0 auto 24px;
+    max-width: 1200px;
+  }
+  
+  #search {
+    flex: 1;
+    min-width: 200px;
+    max-width: 400px;
+    padding: 12px 16px;
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    background: var(--card);
+    color: var(--text);
+    font-size: 16px;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  
+  #search:focus {
+    outline: none;
+    border-color: var(--highlight);
+    box-shadow: 0 0 0 3px rgba(79, 209, 197, 0.2);
+  }
+  
+  .dropdown {
+    position: relative;
+    min-width: 160px;
+  }
+  
+  .dropdown-toggle {
+    padding: 12px 16px;
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    background: var(--card);
+    color: var(--text);
+    cursor: pointer;
+    font-size: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    transition: border-color 0.2s;
+  }
+  
+  .dropdown-toggle:hover {
+    border-color: var(--highlight);
+  }
+  
+  .dropdown-toggle::after {
+    content: "▼";
+    font-size: 10px;
+    margin-left: 8px;
+    transition: transform 0.2s;
+  }
+  
+  .dropdown.open .dropdown-toggle::after {
+    transform: rotate(180deg);
+  }
+  
+  .dropdown-menu {
+    position: absolute;
+    z-index: 1000;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    max-height: 300px;
+    overflow-y: auto;
+    width: 100%;
+    display: none;
+    margin-top: 8px;
+    box-shadow: var(--shadow);
+  }
+  
+  .dropdown.open .dropdown-menu {
+    display: block;
+  }
+  
+  .dropdown-menu label {
+    display: block;
+    padding: 10px 16px;
+    cursor: pointer;
+    transition: background 0.2s;
+    border-bottom: 1px solid var(--border);
+  }
+  
+  .dropdown-menu label:hover {
+    background: rgba(79, 209, 197, 0.1);
+  }
+  
+  .dropdown-menu label:last-child {
+    border-bottom: none;
+  }
+  
+  .dropdown-search {
+    padding: 12px 16px;
+    width: calc(100% - 32px);
+    margin: 12px 16px;
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    background: var(--card);
+    color: var(--text);
+    font-size: 16px;
+  }
+  
+  .dropdown-search:focus {
+    outline: none;
+    border-color: var(--highlight);
+  }
+  
+  select, button {
+    padding: 12px 16px;
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    font-size: 16px;
+    background: var(--card);
+    color: var(--text);
+    cursor: pointer;
+    transition: all 0.2s;
+    min-width: 120px;
+  }
+  
+  select:focus, button:focus {
+    outline: none;
+    border-color: var(--highlight);
+    box-shadow: 0 0 0 3px rgba(79, 209, 197, 0.2);
+  }
+  
+  button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+  
+  #refresh, #toggle-theme {
+    width: 48px;
+    padding: 12px;
+  }
+  
+  #yield-list {
+    max-width: 1200px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 20px;
+    padding: 0 20px;
+  }
+  
+  .pool {
+    background: var(--card);
+    border-radius: var(--radius);
+    padding: 20px;
+    box-shadow: var(--shadow);
+    transition: transform 0.2s, box-shadow 0.2s;
+    border: 1px solid var(--border);
+  }
+  
+  .pool:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  }
+  
+  .pool h3 {
+    margin: 0 0 12px;
+    font-size: 18px;
+    color: var(--text);
+  }
+  
+  .meta {
+    font-size: 14px;
+    color: var(--text-secondary);
+    margin-bottom: 12px;
+  }
+  
+  .yield {
+    font-size: 24px;
+    font-weight: bold;
+    margin: 16px 0;
+    color: var(--highlight);
+  }
+  
+  .extra {
+    font-size: 14px;
+    color: var(--text-secondary);
+    line-height: 1.6;
+  }
+  
+  #load-more {
+    display: block;
+    margin: 40px auto;
+    padding: 14px 28px;
+    font-size: 16px;
+    border-radius: var(--radius);
+    background: var(--highlight);
+    color: white;
+    border: none;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+  
+  #load-more:hover {
+    background: var(--highlight-dark);
+  }
+  
+  #loader {
+    text-align: center;
+    margin: 60px 0;
+  }
+  
+  .spinner {
+    width: 40px;
+    height: 40px;
+    border: 4px solid rgba(79, 209, 197, 0.2);
+    border-top: 4px solid var(--highlight);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin: auto;
+  }
+  
+  @keyframes spin {
+    0% { transform: rotate(0); }
+    100% { transform: rotate(360deg); }
+  }
+  
+  /* Responsive adjustments */
+  @media (max-width: 768px) {
     #controls {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 10px;
-      justify-content: center;
-      margin: 15px 0;
+      flex-direction: column;
+      align-items: stretch;
     }
-    .dropdown {
-      position: relative;
+    
+    #search, .dropdown, select, button {
+      width: 100%;
     }
-    .dropdown-toggle {
-      padding: 8px 12px;
-      border-radius: 8px;
-      border: 1px solid #ccc;
-      background: var(--card);
-      cursor: pointer;
-      font-size: 14px;
-    }
-    .dropdown-menu {
-      position: absolute;
-      z-index: 1000;
-      background: var(--card);
-      border: 1px solid #ccc;
-      border-radius: 8px;
-      max-height: 200px;
-      overflow-y: auto;
-      width: 200px;
-      display: none;
-    }
-    .dropdown.open .dropdown-menu {
-      display: block;
-    }
-    .dropdown-menu label {
-      display: block;
-      padding: 5px 10px;
-      cursor: pointer;
-    }
-    .dropdown-search {
-      padding: 5px;
-      width: 90%;
-      margin: 5px auto;
-      display: block;
-    }
-    select, input, button, label {
-      padding: 8px 12px;
-      border-radius: 8px;
-      border: 1px solid #ccc;
-      font-size: 14px;
-      background: var(--card);
-      color: var(--text);
-    }
+    
     #yield-list {
-      max-width: 960px;
-      margin: auto;
+      grid-template-columns: 1fr;
+      padding: 0;
     }
-    .pool {
-      background: var(--card);
-      border-radius: 12px;
-      padding: 16px;
-      margin-bottom: 14px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-      transition: transform 0.2s;
+    
+    .dropdown-menu {
+      position: fixed;
+      width: calc(100% - 40px);
+      left: 20px;
+      top: 50%;
+      transform: translateY(-50%);
+      max-height: 70vh;
     }
-    .pool:hover {
-      transform: scale(1.01);
-    }
-    .pool h3 {
-      margin: 0 0 8px;
-    }
-    .meta, .extra {
-      font-size: 13px;
-      color: #777;
-    }
-    .yield {
-      font-size: 16px;
-      font-weight: bold;
-      margin-top: 8px;
-      color: var(--highlight);
-    }
-    #load-more {
-      display: block;
-      margin: 20px auto;
-      padding: 10px 20px;
-      font-size: 14px;
-      border-radius: 8px;
-      background: var(--highlight);
-      color: white;
-      border: none;
-      cursor: pointer;
-    }
-    #loader {
-      text-align: center;
-      margin-top: 30px;
-    }
-    .spinner {
-      width: 28px;
-      height: 28px;
-      border: 4px solid #ccc;
-      border-top: 4px solid var(--highlight);
-      border-radius: 50%;
-      animation: spin 1s linear infinite;
-      margin: auto;
-    }
-    @keyframes spin {
-      0% { transform: rotate(0); }
-      100% { transform: rotate(360deg); }
-    }
+  }
+</style>
   </style>
 </head>
 <body>
